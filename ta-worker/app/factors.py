@@ -31,3 +31,12 @@ def compute_x_var(closes: list[float]) -> float:
     avg_below = float(np.abs(below).mean())
     avg_above = float(above.mean())
     return (below.size * avg_below) * (above.size * avg_above)
+
+
+def compute_y_var(price: float, target: float, stop: float) -> float:
+    """Y Var (risk/reward): distance-to-target / distance-to-stop.
+    Returns 0.0 when risk is non-positive (no valid downside reference)."""
+    risk = price - stop
+    if risk <= 0:
+        return 0.0
+    return (target - price) / risk

@@ -16,3 +16,19 @@ def test_x_var_all_on_one_side_returns_zero():
 def test_x_var_raises_on_too_few_bars():
     with pytest.raises(InsufficientBars):
         compute_x_var([1.0, 2.0, 3.0])
+
+
+from app.factors import compute_y_var
+
+
+def test_y_var_basic_ratio():
+    assert compute_y_var(price=100.0, target=110.0, stop=95.0) == pytest.approx(2.0)
+
+
+def test_y_var_zero_or_negative_risk_returns_zero():
+    assert compute_y_var(price=100.0, target=110.0, stop=100.0) == 0.0
+    assert compute_y_var(price=100.0, target=110.0, stop=105.0) == 0.0
+
+
+def test_y_var_negative_reward_allowed_as_negative():
+    assert compute_y_var(price=100.0, target=98.0, stop=95.0) == pytest.approx(-0.4)
