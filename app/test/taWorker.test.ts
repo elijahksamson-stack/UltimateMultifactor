@@ -16,4 +16,13 @@ describe('analyzeBatch', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }))
     await expect(analyzeBatch(['X'])).rejects.toThrow()
   })
+  it('retries on a transient failure then succeeds', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 502 })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ results: [{ ticker: 'AAPL', x_var: 1, y_var: 2, z_var: 3 }] }) })
+    vi.stubGlobal('fetch', fetchMock)
+    const out = await analyzeBatch(['AAPL'])
+    expect(out[0].ticker).toBe('AAPL')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
 })

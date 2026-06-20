@@ -32,7 +32,7 @@ export async function scoreUniverse(targetDate: Date): Promise<{ processed: numb
       try {
         const ratios = await fetchValuationRatios(u.ticker); pb = ratios.pb; ps = ratios.ps
         const stmts = await fetchIncomeStatements(u.ticker, 6)
-        const mapped = (stmts as any[]).map(s => ({ revenue: s.revenue, eps: s.eps, netIncome: s.netIncome }))
+        const mapped = stmts.map(s => ({ revenue: s.revenue, eps: s.eps, netIncome: s.netIncome }))
         eqGrowth = computeEqGrowth(mapped, Math.max(1, mapped.length - 1))
         eqStability = computeEqStability(mapped)
       } catch { /* per-ticker fundamentals failure -> nulls */ }

@@ -1,8 +1,8 @@
 import { scoreUniverse } from '@/lib/pipeline/scoreUniverse'
+import { resolveTargetDate } from '@/lib/pipeline/loadUniverse'
 
 async function main() {
-  const arg = process.argv[2]
-  const date = arg ? new Date(arg) : new Date(new Date().toISOString().slice(0, 10))
+  const date = resolveTargetDate(process.argv[2], new Date())
   const { processed } = await scoreUniverse(date)
   console.log(`Scored ${processed} tickers for ${date.toISOString().slice(0, 10)}`)
 }
