@@ -31,6 +31,11 @@ Each raw factor → sector z-score (`lib/factors/sectorZScore.ts`) → composite
 buckets (`technicalScore`, `valuationScore`, `discoveryScore`) →
 rank by `discoveryScore` (`lib/factors/composite.ts`).
 
+**Filter:** the published list keeps only names with **no negative z on any
+factor** (`scoreRawRows` in `lib/pipeline/batch.ts`) — i.e. at or above sector
+peers on all 7 metrics. A null z (missing data) is not negative and doesn't drop
+a row. This typically reduces ~5,500 names to ~100-200 "strong across the board".
+
 ## Data storage
 
 The app touches **two separate Neon Postgres databases**, with different access
@@ -160,10 +165,13 @@ served at `/api/inngest` (`app/api/inngest/route.ts`, `maxDuration = 300`).
    mark, so the only error trace is in the Inngest dashboard.
 2. `load-universe` — load the active universe, upsert the `ScreenerRun` row to
    `running`, and clear any prior `raw_factor_staging` rows for the date.
-3. `batch-N` — one step **per 50 tickers**: compute raw factors (in-process TA +
-   FMP), persist to `raw_factor_staging`, increment `completedBatches`. A batch
-   throws only on a non-recoverable error (e.g. a DB write failure); a single
-   bad ticker never fails it.
+3. `batch-N` — one step **per 50 tickers** (`BATCH` in `inngest/functions.ts`):
+   compute raw factors (in-process TA + FMP fetched with bounded concurrency,
+   `FMP_CONCURRENCY`), persist to `raw_factor_staging`, increment
+   `completedBatches`. A batch throws only on a non-recoverable error; a single
+   bad ticker never fails it. **Batch is kept small on purpose** — large batches
+   (e.g. 250) issue enough FMP calls in one burst to trip the plan's sustained
+   rate limit and serialize via the circuit breaker (~60× slower per ticker).
 4. `finalize` — `finalizeScreen(date)` z-scores/composites/ranks the staged rows
    and writes `advanced_screen_results` **transactionally**, then marks the
    `ScreenerRun` `complete`.
@@ -212,14 +220,13 @@ with design tokens declared as CSS variables in `app/globals.css`.
 
 ## Gotchas
 
-- **Freshness gate vs. the 3 AM cron.** `resolveTargetDate` defaults the target
-  to *today* (US/Eastern), but the gate requires OTM `price_history`'s max
-  `date` to equal the target. At 3 AM the latest bars are the *previous* trading
-  day, so the scheduled cron currently can't pass the gate on its own — only
-  **manual triggers with an explicit, already-ingested trading date** complete.
-  (Mind market holidays, e.g. Juneteenth 6/19.) Fixing the cron means resolving
-  the target to OTM's max price date (or the last completed trading day) instead
-  of "today" — a one-line change, still pending.
+- **Freshness gate / target resolution (`resolveScreenTarget`).** A run with an
+  **explicit date** (manual trigger) must equal OTM `price_history`'s max `date`
+  or it throws (refuses stale data). A run with **no date** (the 3 AM cron / any
+  no-date trigger) targets OTM's **latest available trading day**, so the gate
+  self-passes — this is why the nightly run completes on its own despite prices
+  lagging a day (and market holidays like Juneteenth 6/19). Auto runs also throw
+  if OTM's max bar is > `MAX_OTM_STALENESS_DAYS` (7) old — a broken-ingest guard.
 - **X Var magnitude / Float columns.** See *Data storage* — raw factor columns
   are `double precision` for a reason (X Var spans ~12 orders of magnitude);
   don't narrow them back to `Decimal`.

@@ -4,8 +4,9 @@ import { loadActiveUniverse } from '@/lib/pipeline/loadUniverse'
 import { computeBatchRawFactors } from '@/lib/pipeline/batch'
 
 async function main() {
+  const size = Number(process.argv[2] ?? 50)
   const uni = await loadActiveUniverse()
-  const slice = uni.slice(0, 50).map(u => ({ ticker: u.ticker, sector: u.sector }))
+  const slice = uni.slice(0, size).map(u => ({ ticker: u.ticker, sector: u.sector }))
   const t0 = Date.now()
   const rows = await computeBatchRawFactors(slice, 504)
   const ms = Date.now() - t0

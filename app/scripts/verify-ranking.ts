@@ -5,8 +5,8 @@ import { prisma } from '@/lib/db/ownClient'
 import { scoreRawRows, type RawRow } from '@/lib/pipeline/batch'
 
 async function main() {
-  const latest = await prisma.screenerRun.findFirst({ where: { status: 'complete' }, orderBy: { runDate: 'desc' }, select: { runDate: true } })
-  if (!latest) { console.log('no completed run'); return }
+  const latest = await prisma.advancedScreenResult.findFirst({ orderBy: { runDate: 'desc' }, select: { runDate: true } })
+  if (!latest) { console.log('no results yet'); return }
   const rows = await prisma.advancedScreenResult.findMany({ where: { runDate: latest.runDate } })
   const raw: RawRow[] = rows.map(r => ({
     ticker: r.ticker, sector: r.sector,

@@ -7,7 +7,11 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   const p = parseDiscoveryParams(req.nextUrl.searchParams)
-  const latestRun = await prisma.screenerRun.findFirst({ where: { status: 'complete' }, orderBy: { runDate: 'desc' }, select: { runDate: true } })
+  // Serve the latest run that actually has persisted results, independent of any
+  // in-progress run. `advanced_screen_results` is only ever written by finalize's
+  // atomic swap, so its newest runDate is always a complete, consistent screen —
+  // this keeps the page populated while a re-run is mid-flight.
+  const latestRun = await prisma.advancedScreenResult.findFirst({ orderBy: { runDate: 'desc' }, select: { runDate: true } })
   if (!latestRun) return NextResponse.json({ error: 'no completed screen yet' }, { status: 404 })
   const rows = await prisma.advancedScreenResult.findMany({
     where: { runDate: latestRun.runDate, ...(p.sector ? { sector: p.sector } : {}) },

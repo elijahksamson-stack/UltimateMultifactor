@@ -3,9 +3,11 @@ import { prisma } from '@/lib/db/ownClient'
 import { otmPriceMaxDate, loadActiveUniverse, resolveScreenTarget } from '@/lib/pipeline/loadUniverse'
 import { computeBatchRawFactors, persistStaging, finalizeScreen } from '@/lib/pipeline/batch'
 
-// Tickers per batch step. With FMP now fetched concurrently, a larger batch keeps
-// each step well under maxDuration while cutting Inngest per-step scheduling overhead.
-const BATCH = 250
+// Tickers per batch step. Kept small: FMP is fetched concurrently within a batch,
+// and small bursty batches stay under the plan's sustained-rate limit (larger
+// batches trip FMP's circuit breaker and serialize — a 250-batch measured ~60x
+// slower per ticker than a 50-batch).
+const BATCH = 50
 
 export const runScreen = inngest.createFunction(
   {

@@ -17,14 +17,26 @@ const FACTORS: FactorSpec<RawRow>[] = [
   { key: 'eqStability', invert: false }, { key: 'eqGrowth', invert: false },
 ]
 
+// Per-factor z-score keys on a scored row. A row is dropped from the discovery
+// list if ANY of these is negative (below-sector on that factor) — the screen
+// only surfaces names that are at or above their sector peers on every metric.
+const Z_KEYS = ['zX', 'zY', 'zZ', 'zPB', 'zPS', 'zEQStability', 'zEQGrowth'] as const
+
+// A null z (missing data, e.g. no FMP EQ) is not negative, so it does not drop the row.
+type ScoredZ = Record<(typeof Z_KEYS)[number], number | null>
+const hasNoNegativeZ = (r: ScoredZ): boolean =>
+  Z_KEYS.every(k => { const v = r[k]; return v == null || v >= 0 })
+
 export function scoreRawRows(rows: RawRow[]) {
+  // Z-score against the FULL universe first (sector stats need every row),
+  // then drop any name with a negative z on any factor, then rank the survivors.
   const z = sectorZScores(rows, FACTORS, r => r.sector)
   const scored = rows.map(r => {
     const zr = z.get(r.ticker)!
     const zRec = { zX: zr.xVar, zY: zr.yVar, zZ: zr.zVar, zPB: zr.pb, zPS: zr.ps, zEQStability: zr.eqStability, zEQGrowth: zr.eqGrowth }
     return { ...r, ...zRec, ...composite(zRec) }
   })
-  return rankRows(scored)
+  return rankRows(scored.filter(hasNoNegativeZ))
 }
 
 // FMP fundamentals are fetched concurrently across tickers. The plan sustains
