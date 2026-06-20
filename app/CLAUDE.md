@@ -93,6 +93,26 @@ retriable; the final transactional swap publishes a consistent ranked list.
 | `GET /api/discovery?sector=&limit=&format=csv` | — | Latest ranked discovery list; `limit` defaults 100, clamped to 1000; `format=csv` streams a CSV download, otherwise JSON |
 | `/api/inngest` | Inngest signing key | Inngest serve route (function registration + invocation) |
 
+## UI
+
+The discovery screener UI lives at `/` (App Router). It uses a **coder-minimalist
+theme** — dark background, monospace type, hairline borders, a single mint accent —
+with design tokens declared as CSS variables in `app/globals.css` (consumed by both
+`app/layout.tsx` and the discovery styles).
+
+- `app/page.tsx` — index route (`dynamic = 'force-dynamic'`), renders the table.
+- `app/ui/DiscoveryTable.tsx` — client component (`'use client'`) that fetches
+  `GET /api/discovery?limit=500`, renders sortable columns (click a header to
+  toggle asc/desc), a **sector filter** dropdown, **z-score heat coloring** of the
+  per-factor z columns (sign + magnitude buckets → `z-{pos|neg}-{1..3}` classes),
+  and a **CSV download** link (`/api/discovery?format=csv`). Handles loading /
+  empty / error states.
+- `app/ui/discovery.module.css` — CSS-module styles for the table (selectors are
+  scoped under `.tableScroll` to satisfy CSS-module purity).
+- `lib/ui/format.ts` — presentation helpers: `formatScore` (2dp, em-dash for
+  null), `compareBy<T>` (sort comparator, nulls last), `zHeat` (z → heat class).
+  Unit-tested in `test/format.test.ts`.
+
 ## Environment variables
 
 | Var | Purpose |

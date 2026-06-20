@@ -32,7 +32,14 @@ job, `/api/discovery`, and UI. See `app/CLAUDE.md`.
   Inngest function (3 AM ET cron + `screen/run.trigger` event, step-per-batch →
   transactional finalize), `POST /api/admin/trigger-screen` (bearer auth), and
   `GET /api/discovery` (JSON + CSV). See `app/CLAUDE.md`.
-- **Plan 4 (UI) — pending.**
+- **Plan 4 (UI) — done.** Discovery screener page at `/` (App Router): a
+  coder-minimalist dark/monospace table with sortable columns, a sector filter,
+  z-score heat coloring, and CSV download. Client-fetches `/api/discovery`.
+  See `app/CLAUDE.md` (UI section).
+
+The app is now **full-stack**: `ta-worker/` (Python / FastAPI on Railway) +
+`app/` (Next.js on Vercel — scoring core + Inngest pipeline + `/api/discovery` +
+discovery UI).
 
 > Deploy registers the app's `/api/inngest` serve URL in the shared Inngest
 > dashboard as a new app **`ultimatemultifactor`**.
