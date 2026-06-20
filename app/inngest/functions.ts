@@ -1,9 +1,11 @@
 import { inngest } from './client'
 import { prisma } from '@/lib/db/ownClient'
-import { otmPriceMaxDate, latestDateIsToday, loadActiveUniverse, resolveTargetDate } from '@/lib/pipeline/loadUniverse'
+import { otmPriceMaxDate, loadActiveUniverse, resolveScreenTarget } from '@/lib/pipeline/loadUniverse'
 import { computeBatchRawFactors, persistStaging, finalizeScreen } from '@/lib/pipeline/batch'
 
-const BATCH = 50
+// Tickers per batch step. With FMP now fetched concurrently, a larger batch keeps
+// each step well under maxDuration while cutting Inngest per-step scheduling overhead.
+const BATCH = 250
 
 export const runScreen = inngest.createFunction(
   {
@@ -19,12 +21,9 @@ export const runScreen = inngest.createFunction(
   [{ cron: 'TZ=America/New_York 0 3 * * *' }, { event: 'screen/run.trigger' }],
   async ({ event, step }) => {
     const targetIso = await step.run('resolve-and-gate', async () => {
-      const d = resolveTargetDate((event as any)?.data?.targetDate, new Date())
       const maxDate = await otmPriceMaxDate()
-      if (!maxDate || !latestDateIsToday(maxDate, d)) {
-        throw new Error(`OTM price_history not fresh for ${d.toISOString().slice(0, 10)}`)
-      }
-      return d.toISOString()
+      // Explicit date → strict freshness gate; no date (cron) → target OTM's latest day.
+      return resolveScreenTarget(maxDate, (event as any)?.data?.targetDate, new Date()).toISOString()
     })
     const date = new Date(targetIso)
 

@@ -13,6 +13,31 @@ export function resolveTargetDate(arg: string | undefined, now: Date): Date {
   return new Date(`${ymd}T00:00:00Z`)
 }
 
+// Refuse an auto (cron) run if OTM's latest bar is implausibly old — i.e. the
+// upstream price ingest is broken, not just a weekend/holiday.
+export const MAX_OTM_STALENESS_DAYS = 7
+const MS_PER_DAY = 86_400_000
+
+// Resolve + gate the run's target date against OTM's latest available bar.
+// - Explicit date (manual trigger): must equal OTM's max date, else throw (stale).
+// - No date (cron/auto): target OTM's latest trading day so the gate always
+//   passes, with a staleness guard against a broken ingest.
+export function resolveScreenTarget(maxDate: Date | null, explicit: string | undefined, now: Date): Date {
+  if (!maxDate) throw new Error('OTM price_history is empty')
+  const maxYmd = maxDate.toISOString().slice(0, 10)
+  const target = resolveTargetDate(explicit ?? maxYmd, now)
+  if (!latestDateIsToday(maxDate, target)) {
+    throw new Error(`OTM price_history not fresh for ${target.toISOString().slice(0, 10)} (max ${maxYmd})`)
+  }
+  if (!explicit) {
+    const ageDays = Math.floor((now.getTime() - maxDate.getTime()) / MS_PER_DAY)
+    if (ageDays > MAX_OTM_STALENESS_DAYS) {
+      throw new Error(`OTM price_history stale: max ${maxYmd} is ${ageDays}d old`)
+    }
+  }
+  return target
+}
+
 export async function loadActiveUniverse(): Promise<UniverseRow[]> {
   const { rows } = await otmPool().query<UniverseRow>(
     `SELECT ticker, sector FROM tickers WHERE is_active = true ORDER BY ticker`
