@@ -1,6 +1,8 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
-import { formatScore, compareBy, zHeat } from '@/lib/ui/format'
+import { formatScore, compareBy } from '@/lib/ui/format'
+import { heatBg, rangeOf, type Range } from '@/lib/ui/gradient'
+import StockDetail from './StockDetail'
 import styles from './discovery.module.css'
 
 const s = styles as Record<string, string>
@@ -16,6 +18,8 @@ const Z_COLS: { key: keyof Row; label: string }[] = [
   { key: 'zPB', label: 'P/B' }, { key: 'zPS', label: 'P/S' },
   { key: 'zEQStability', label: 'EQ·STB' }, { key: 'zEQGrowth', label: 'EQ·GRW' },
 ]
+// Numeric columns that get the per-column gradient heat background.
+const NUM_KEYS: (keyof Row)[] = ['discoveryScore', 'technicalScore', 'valuationScore', ...Z_COLS.map(c => c.key)]
 
 export default function DiscoveryTable() {
   const [rows, setRows] = useState<Row[]>([])
@@ -24,12 +28,13 @@ export default function DiscoveryTable() {
   const [sector, setSector] = useState<string>('all')
   const [sortKey, setSortKey] = useState<keyof Row>('rank')
   const [dir, setDir] = useState<'asc' | 'desc'>('asc')
+  const [selected, setSelected] = useState<{ ticker: string; sector: string | null } | null>(null)
 
   useEffect(() => {
     let live = true
     setState('loading')
     fetch('/api/discovery?limit=500')
-      .then(r => r.ok ? r.json() : Promise.reject(new Error(String(r.status))))
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then(d => { if (!live) return; setRows(d.results ?? []); setRunDate(d.runDate ?? null); setState((d.results?.length ?? 0) ? 'ready' : 'empty') })
       .catch(() => { if (live) setState('error') })
     return () => { live = false }
@@ -41,11 +46,23 @@ export default function DiscoveryTable() {
     return [...filtered].sort(compareBy<Row>(sortKey, dir))
   }, [rows, sector, sortKey, dir])
 
+  // Per-column min/max across the visible rows, so the gradient scales to what's on screen.
+  const ranges = useMemo(() => {
+    const m: Record<string, Range> = {}
+    for (const k of NUM_KEYS) m[k] = rangeOf(view.map(r => r[k] as number | null))
+    return m
+  }, [view])
+
   const onSort = (key: keyof Row) => {
     if (key === sortKey) setDir(d => (d === 'asc' ? 'desc' : 'asc'))
     else { setSortKey(key); setDir(key === 'rank' || key === 'ticker' ? 'asc' : 'desc') }
   }
-  const caret = (key: keyof Row) => sortKey === key ? <span className={s.caret}>{dir === 'asc' ? '↑' : '↓'}</span> : null
+  const caret = (key: keyof Row) => (sortKey === key ? <span className={s.caret}>{dir === 'asc' ? '↑' : '↓'}</span> : null)
+
+  const numCell = (r: Row, k: keyof Row) => {
+    const v = r[k] as number | null
+    return <td key={String(k)} style={{ background: heatBg(v, ranges[k as string]) }}>{formatScore(v)}</td>
+  }
 
   return (
     <div className={s.wrap}>
@@ -59,6 +76,7 @@ export default function DiscoveryTable() {
           {sectors.map(sec => <option key={sec} value={sec}>{sec === 'all' ? 'all sectors' : sec}</option>)}
         </select>
         <a className={s.download} href={`/api/discovery?format=csv${sector !== 'all' ? `&sector=${encodeURIComponent(sector)}` : ''}&limit=1000`}>↓ csv</a>
+        <span className={s.hint}>click a row for price history</span>
       </div>
 
       {state === 'loading' && <div className={s.empty}>loading…</div>}
@@ -80,20 +98,22 @@ export default function DiscoveryTable() {
             </thead>
             <tbody>
               {view.map(r => (
-                <tr key={r.ticker}>
+                <tr key={r.ticker} className={s.clickRow} onClick={() => setSelected({ ticker: r.ticker, sector: r.sector })}>
                   <td className={`${s.left} ${r.rank === 1 ? s.rankTop : s.rank}`}>{r.rank}</td>
                   <td className={`${s.left} ${s.ticker}`}>{r.ticker}</td>
                   <td className={`${s.left} ${s.sector}`}>{r.sector ?? '—'}</td>
-                  <td>{formatScore(r.discoveryScore)}</td>
-                  <td>{formatScore(r.technicalScore)}</td>
-                  <td>{formatScore(r.valuationScore)}</td>
-                  {Z_COLS.map(c => <td key={String(c.key)} className={s[zHeat(r[c.key] as number | null)]}>{formatScore(r[c.key] as number | null)}</td>)}
+                  {numCell(r, 'discoveryScore')}
+                  {numCell(r, 'technicalScore')}
+                  {numCell(r, 'valuationScore')}
+                  {Z_COLS.map(c => numCell(r, c.key))}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+
+      {selected && <StockDetail ticker={selected.ticker} sector={selected.sector} onClose={() => setSelected(null)} />}
     </div>
   )
 }
