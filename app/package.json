@@ -12,8 +12,8 @@
   },
   "dependencies": {
     "@prisma/client": "5.22.0",
-    "inngest": "^3.27.4",
-    "next": "15.1.0",
+    "inngest": "^3.54.2",
+    "next": "^15.5.19",
     "pg": "8.13.1",
     "react": "19.0.0",
     "react-dom": "19.0.0"
