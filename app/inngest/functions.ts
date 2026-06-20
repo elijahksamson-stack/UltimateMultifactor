@@ -6,7 +6,16 @@ import { computeBatchRawFactors, persistStaging, finalizeScreen } from '@/lib/pi
 const BATCH = 50
 
 export const runScreen = inngest.createFunction(
-  { id: 'run-screen', retries: 2 },
+  {
+    id: 'run-screen',
+    retries: 2,
+    onFailure: async () => {
+      await prisma.screenerRun.updateMany({
+        where: { status: 'running' },
+        data: { status: 'failed', completedAt: new Date(), errorLog: 'run aborted (see Inngest dashboard)' },
+      })
+    },
+  },
   [{ cron: 'TZ=America/New_York 0 3 * * *' }, { event: 'screen/run.trigger' }],
   async ({ event, step }) => {
     const targetIso = await step.run('resolve-and-gate', async () => {

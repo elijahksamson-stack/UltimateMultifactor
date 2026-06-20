@@ -7,6 +7,12 @@ describe('toCsv', () => {
     expect(csv.split('\n')[0]).toBe('rank,ticker,sector,discoveryScore')
     expect(csv.split('\n')[1]).toBe('1,AAPL,Tech,1.23')
   })
+
+  it('escapes spreadsheet-formula-prone values with a leading tab', () => {
+    const csv = toCsv([{ ticker: '=cmd', sector: '+evil' }])
+    const row = csv.split('\n')[1]
+    expect(row).toBe('\t=cmd,\t+evil')
+  })
 })
 
 describe('parseDiscoveryParams', () => {
