@@ -62,6 +62,37 @@ npm test                      # vitest unit tests
 npm run run-screen 2026-06-19 # score the universe for a given date (defaults to today)
 ```
 
+## Inngest pipeline + API
+
+The screen runs as an **Inngest function** (`inngest/functions.ts` → `runScreen`),
+served at `/api/inngest` (`app/api/inngest/route.ts`).
+
+**Triggers** (either fires the same function):
+- **Cron** — `TZ=America/New_York 0 3 * * *` (3:00 AM ET daily).
+- **Event** — `screen/run.trigger` with optional `{ data: { targetDate } }`.
+
+**Step shape** (each `step.run` is a retriable, memoized unit; `retries: 2`):
+1. `resolve-and-gate` — resolve target date, then **gate on OTM freshness**
+   (`otmPriceMaxDate` + `latestDateIsToday`); throws if `price_history` is stale.
+2. `load-universe` — load the active universe, upsert the `ScreenerRun` row to
+   `running`, and clear any prior `rawFactorStaging` rows for the date.
+3. `batch-N` — one step **per 50 tickers**: compute raw factors, persist to the
+   `rawFactorStaging` table, and increment `completedBatches`.
+4. `finalize` — `finalizeScreen(date)` z-scores/composites/ranks the staged rows
+   and writes `advancedScreenResult` **transactionally**, then marks the
+   `ScreenerRun` `complete`.
+
+Step-per-batch over the staging table keeps each Inngest step small and
+retriable; the final transactional swap publishes a consistent ranked list.
+
+**Endpoints:**
+
+| Endpoint | Auth | Purpose |
+|----------|------|---------|
+| `POST /api/admin/trigger-screen?date=YYYY-MM-DD` | Bearer `ADMIN_TRIGGER_SECRET` | Manually fire `screen/run.trigger` (omit `date` → today) |
+| `GET /api/discovery?sector=&limit=&format=csv` | — | Latest ranked discovery list; `limit` defaults 100, clamped to 1000; `format=csv` streams a CSV download, otherwise JSON |
+| `/api/inngest` | Inngest signing key | Inngest serve route (function registration + invocation) |
+
 ## Environment variables
 
 | Var | Purpose |
@@ -72,6 +103,9 @@ npm run run-screen 2026-06-19 # score the universe for a given date (defaults to
 | `FMP_BASE_URL` | Optional FMP base URL override (defaults to FMP stable) |
 | `TA_WORKER_URL` | Base URL of the TA worker service |
 | `TA_WORKER_SECRET` | Bearer secret for the TA worker |
+| `INNGEST_EVENT_KEY` | Inngest event key (sending events / `inngest.send`) |
+| `INNGEST_SIGNING_KEY` | Inngest signing key (verifies the `/api/inngest` serve route) |
+| `ADMIN_TRIGGER_SECRET` | Bearer secret for `POST /api/admin/trigger-screen` |
 
 ## Gotcha
 

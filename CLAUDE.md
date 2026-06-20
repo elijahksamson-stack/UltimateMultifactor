@@ -28,5 +28,11 @@ job, `/api/discovery`, and UI. See `app/CLAUDE.md`.
 ## Status
 
 - Plan 1 (TA worker) and Plan 2 (scoring core orchestration) — implemented.
-- **Plan 3 (Inngest scheduled job + `/api/discovery`) — pending.**
+- **Plan 3 (Inngest scheduled job + `/api/discovery`) — done.** `runScreen`
+  Inngest function (3 AM ET cron + `screen/run.trigger` event, step-per-batch →
+  transactional finalize), `POST /api/admin/trigger-screen` (bearer auth), and
+  `GET /api/discovery` (JSON + CSV). See `app/CLAUDE.md`.
 - **Plan 4 (UI) — pending.**
+
+> Deploy registers the app's `/api/inngest` serve URL in the shared Inngest
+> dashboard as a new app **`ultimatemultifactor`**.
