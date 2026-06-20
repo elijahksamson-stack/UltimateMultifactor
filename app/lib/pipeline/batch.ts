@@ -39,10 +39,11 @@ export function scoreRawRows(rows: RawRow[]) {
   return rankRows(scored.filter(hasNoNegativeZ))
 }
 
-// FMP fundamentals are fetched concurrently across tickers. The plan sustains
-// far more than serial throughput; this bound stays well under the rate ceiling
-// while overlapping request latency. Tune via FMP_CALLS_PER_MINUTE on the client.
-const FMP_CONCURRENCY = 6
+// FMP fundamentals are fetched concurrently across tickers. Kept gentle: in
+// production, higher concurrency bursts trip FMP's 429 circuit breaker (60s
+// global pauses) and the run stalls erratically. 3 overlaps latency for a solid
+// speedup while staying under the sustained limit. Tune via FMP_CALLS_PER_MINUTE.
+const FMP_CONCURRENCY = Number(process.env.FMP_CONCURRENCY) || 3
 
 // Bounded-concurrency map that preserves input order.
 async function mapWithConcurrency<I, O>(

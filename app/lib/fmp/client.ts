@@ -31,10 +31,10 @@ export interface FMPClientConfig {
 const DEFAULT_CONFIG: Required<FMPClientConfig> = {
   apiKey: FMP_API_KEY || '',
   baseUrl: FMP_BASE_URL,
-  // The plan sustains well above the old 750/min default (measured ~7.5k/min at
-  // concurrency 10 with zero throttling). Keep headroom below that ceiling so the
-  // per-minute window cap never trips the 60s circuit-breaker pause during a run.
-  callsPerMinute: Number(process.env.FMP_CALLS_PER_MINUTE) || 6000,
+  // Production trips 429s well below the burst rate a local probe suggests, so
+  // stay conservative; combined with low fetch concurrency this avoids the
+  // circuit breaker. Override via FMP_CALLS_PER_MINUTE.
+  callsPerMinute: Number(process.env.FMP_CALLS_PER_MINUTE) || 3000,
   maxRetries: 3,
   retryDelay: 1000,
   timeout: 30000,
@@ -198,8 +198,11 @@ export class FMPClient {
             // 429 = standard rate limit, 402 = FMP's "payment required" which also indicates rate limit exceeded
             this.consecutive429s++;
             if (this.consecutive429s >= 5) {
-              this.rateLimitPausedUntil = Date.now() + 60000;
-              console.log(`[FMP] Circuit breaker: ${this.consecutive429s} consecutive 429s. Pausing 60s.`);
+              // Short pause so an occasional trip doesn't stall the whole run for a
+              // minute; FMP's per-minute window rolls continuously, so a brief
+              // backoff is enough to recover.
+              this.rateLimitPausedUntil = Date.now() + 10000;
+              console.log(`[FMP] Circuit breaker: ${this.consecutive429s} consecutive 429s. Pausing 10s.`);
             }
             throw new FMPRateLimitError(endpoint);
           }
