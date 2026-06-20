@@ -1,0 +1,48 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("OWN_DATABASE_URL")
+}
+
+model ScreenerRun {
+  id               Int       @id @default(autoincrement())
+  runDate          DateTime  @db.Date
+  status           String    @default("running")
+  tickersProcessed Int       @default(0)
+  startedAt        DateTime  @default(now())
+  completedAt      DateTime?
+  errorLog         String?
+  @@unique([runDate])
+  @@map("screener_runs")
+}
+
+model AdvancedScreenResult {
+  id             Int      @id @default(autoincrement())
+  runDate        DateTime @db.Date
+  ticker         String   @db.VarChar(10)
+  sector         String?  @db.VarChar(100)
+  xVar           Decimal? @db.Decimal(18,6)
+  yVar           Decimal? @db.Decimal(18,6)
+  zVar           Int?
+  pb             Decimal? @db.Decimal(18,6)
+  ps             Decimal? @db.Decimal(18,6)
+  eqStability    Decimal? @db.Decimal(18,6)
+  eqGrowth       Decimal? @db.Decimal(18,6)
+  zX             Decimal? @db.Decimal(10,4)
+  zY             Decimal? @db.Decimal(10,4)
+  zZ             Decimal? @db.Decimal(10,4)
+  zPB            Decimal? @db.Decimal(10,4)
+  zPS            Decimal? @db.Decimal(10,4)
+  zEQStability   Decimal? @db.Decimal(10,4)
+  zEQGrowth      Decimal? @db.Decimal(10,4)
+  technicalScore Decimal? @db.Decimal(10,4)
+  valuationScore Decimal? @db.Decimal(10,4)
+  discoveryScore Decimal? @db.Decimal(10,4)
+  rank           Int?
+  @@unique([runDate, ticker])
+  @@index([runDate, rank])
+  @@map("advanced_screen_results")
+}
