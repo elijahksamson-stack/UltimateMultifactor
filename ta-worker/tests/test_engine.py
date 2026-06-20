@@ -36,3 +36,16 @@ def test_support_resistance_splits_by_price():
     assert all(s < 9.0 for s in levels["supports"])
     assert len(levels["resistances"]) >= 1
     assert len(levels["supports"]) >= 1
+
+
+from app.config import Settings
+
+
+def test_settings_reads_env(monkeypatch):
+    monkeypatch.setenv("OTM_DATABASE_URL", "postgresql://x/y")
+    monkeypatch.setenv("TA_WORKER_SECRET", "s3cret")
+    monkeypatch.setenv("TA_LOOKBACK_DAYS", "300")
+    s = Settings()
+    assert s.otm_database_url == "postgresql://x/y"
+    assert s.ta_worker_secret == "s3cret"
+    assert s.ta_lookback_days == 300
