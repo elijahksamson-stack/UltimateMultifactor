@@ -68,7 +68,7 @@ export default function DiscoveryTable() {
     <div className={s.wrap}>
       <div className={s.header}>
         <div className={s.title}><b>ultimatemultifactor</b> · discovery</div>
-        <div className={s.meta}>{runDate ? `run ${String(runDate).slice(0, 10)} · ${rows.length} names` : ''}</div>
+        <div className={s.meta}><a href="/dashboard" className={s.navLink}>dashboard →</a>{runDate ? `run ${String(runDate).slice(0, 10)} · ${rows.length} names` : ''}</div>
       </div>
 
       <div className={s.controls}>

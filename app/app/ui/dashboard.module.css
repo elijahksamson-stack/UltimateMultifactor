@@ -1,0 +1,58 @@
+.wrap { max-width: 1200px; margin: 0 auto; padding: 32px 24px 80px; }
+.header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.title { font-size: 15px; font-weight: 600; letter-spacing: 0.02em; }
+.title b { color: var(--accent); font-weight: 600; }
+.nav { display: flex; align-items: baseline; gap: 16px; }
+.nav a { font-size: 12px; }
+.meta { color: var(--muted); font-size: 12px; }
+.empty, .error { color: var(--muted); padding: 48px; text-align: center; }
+
+/* KPI tiles */
+.kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 28px; }
+.kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+.kpiLabel { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+.kpiValue { font-size: 20px; font-weight: 700; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kpiSub { color: var(--muted); font-size: 11px; margin-top: 2px; }
+
+.section { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; margin: 8px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+
+/* sector breakdown: donut + table */
+.breakdown { display: flex; gap: 28px; align-items: center; margin-bottom: 32px; flex-wrap: wrap; }
+.donutWrap { flex: 0 0 auto; }
+.donut { width: 240px; height: 240px; display: block; }
+.donutCenter { fill: var(--text); font-size: 30px; font-weight: 700; font-family: inherit; }
+.donutCenterSub { fill: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+.sectorTable { flex: 1 1 320px; border-collapse: collapse; min-width: 280px; }
+.sectorTable th, .sectorTable td { padding: 6px 10px; text-align: right; white-space: nowrap; }
+.sectorTable th.left, .sectorTable td.left { text-align: left; }
+.sectorTable thead th { color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--line); }
+.sectorTable tbody tr { border-bottom: 1px solid var(--line); }
+.sectorTable tbody tr:last-child { border-bottom: none; }
+.swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 8px; vertical-align: middle; }
+
+/* technical-demo cards */
+.demos { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.cardHead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.cardTicker { font-weight: 700; color: var(--accent); font-size: 14px; }
+.cardSector { color: var(--muted); font-size: 11px; }
+.cardScore { font-weight: 600; font-size: 14px; }
+.cardEmpty { color: var(--muted); font-size: 12px; padding: 28px 0; text-align: center; }
+.cardSpark { display: block; width: 100%; aspect-ratio: 320 / 96; height: auto; border: 1px solid var(--line); border-radius: 6px; background: linear-gradient(180deg, rgba(0,0,0,0.15), transparent); }
+.sparkBand { fill: rgba(94, 230, 168, 0.10); stroke: none; }
+.sparkTrend { fill: none; stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
+.sparkLine { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+
+.buyRow { display: flex; align-items: center; gap: 10px; margin: 10px 0 8px; }
+.buyLabel { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; min-width: 64px; }
+.buy_oversold, .buy_pullback { color: var(--accent); }
+.buy_at_trend { color: var(--text); }
+.buy_extended { color: #E0B15E; }
+.buy_downtrend { color: var(--neg); }
+.buyBar { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.buyBar span { display: block; height: 100%; background: var(--accent); }
+.buyStrength { font-size: 12px; font-weight: 600; min-width: 22px; text-align: right; }
+.cardStats { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 11px; flex-wrap: wrap; }
+
+@media (max-width: 900px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .breakdown { justify-content: center; } .donut { width: 200px; height: 200px; } }

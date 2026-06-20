@@ -3,6 +3,7 @@
 .title { font-size: 15px; font-weight: 600; letter-spacing: 0.02em; }
 .title b { color: var(--accent); font-weight: 600; }
 .meta { color: var(--muted); font-size: 12px; }
+.navLink { margin-right: 14px; }
 .controls { display: flex; gap: 12px; align-items: center; margin: 20px 0 12px; flex-wrap: wrap; }
 .select, .download {
   background: var(--panel); color: var(--text); border: 1px solid var(--line);
