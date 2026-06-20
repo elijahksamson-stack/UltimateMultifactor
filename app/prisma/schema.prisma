@@ -26,13 +26,13 @@ model RawFactorStaging {
   runDate     DateTime @db.Date
   ticker      String   @db.VarChar(10)
   sector      String?  @db.VarChar(100)
-  xVar        Decimal? @db.Decimal(18,6)
-  yVar        Decimal? @db.Decimal(18,6)
+  xVar        Float?
+  yVar        Float?
   zVar        Int?
-  pb          Decimal? @db.Decimal(18,6)
-  ps          Decimal? @db.Decimal(18,6)
-  eqStability Decimal? @db.Decimal(18,6)
-  eqGrowth    Decimal? @db.Decimal(18,6)
+  pb          Float?
+  ps          Float?
+  eqStability Float?
+  eqGrowth    Float?
   @@unique([runDate, ticker])
   @@map("raw_factor_staging")
 }
@@ -42,13 +42,13 @@ model AdvancedScreenResult {
   runDate        DateTime @db.Date
   ticker         String   @db.VarChar(10)
   sector         String?  @db.VarChar(100)
-  xVar           Decimal? @db.Decimal(18,6)
-  yVar           Decimal? @db.Decimal(18,6)
+  xVar           Float?
+  yVar           Float?
   zVar           Int?
-  pb             Decimal? @db.Decimal(18,6)
-  ps             Decimal? @db.Decimal(18,6)
-  eqStability    Decimal? @db.Decimal(18,6)
-  eqGrowth       Decimal? @db.Decimal(18,6)
+  pb             Float?
+  ps             Float?
+  eqStability    Float?
+  eqGrowth       Float?
   zX             Decimal? @db.Decimal(10,4)
   zY             Decimal? @db.Decimal(10,4)
   zZ             Decimal? @db.Decimal(10,4)
