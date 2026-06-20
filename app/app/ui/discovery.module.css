@@ -1,0 +1,33 @@
+.wrap { max-width: 1200px; margin: 0 auto; padding: 32px 24px 80px; }
+.header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 4px; }
+.title { font-size: 15px; font-weight: 600; letter-spacing: 0.02em; }
+.title b { color: var(--accent); font-weight: 600; }
+.meta { color: var(--muted); font-size: 12px; }
+.controls { display: flex; gap: 12px; align-items: center; margin: 20px 0 12px; flex-wrap: wrap; }
+.select, .download {
+  background: var(--panel); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 10px; font: inherit; font-size: 12px; cursor: pointer;
+}
+.download:hover, .select:hover { border-color: var(--accent); }
+.tableScroll { border: 1px solid var(--line); border-radius: 8px; overflow: auto; }
+.tableScroll table { width: 100%; border-collapse: collapse; }
+.tableScroll th, .tableScroll td { padding: 6px 10px; text-align: right; white-space: nowrap; height: 28px; }
+.tableScroll th.left, .tableScroll td.left { text-align: left; }
+.tableScroll thead th {
+  position: sticky; top: 0; background: var(--panel); color: var(--muted);
+  font-weight: 500; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
+  border-bottom: 1px solid var(--line); cursor: pointer; user-select: none;
+}
+.tableScroll thead th:hover { color: var(--text); }
+.caret { color: var(--accent); margin-left: 4px; }
+.tableScroll tbody tr { border-bottom: 1px solid var(--line); }
+.tableScroll tbody tr:last-child { border-bottom: none; }
+.tableScroll tbody tr:hover { background: var(--panel); }
+.rank { color: var(--muted); }
+.rankTop { color: var(--accent); }
+.ticker { color: var(--text); font-weight: 600; }
+.sector { color: var(--muted); font-size: 12px; }
+.empty, .error { color: var(--muted); padding: 40px; text-align: center; }
+.z-null { color: var(--zero); }
+.z-pos-1 { color: #9ad9bd; } .z-pos-2 { color: #6fe0ad; } .z-pos-3 { color: var(--pos); font-weight: 600; }
+.z-neg-1 { color: #d39aa6; } .z-neg-2 { color: #e07d8e; } .z-neg-3 { color: var(--neg); font-weight: 600; }
