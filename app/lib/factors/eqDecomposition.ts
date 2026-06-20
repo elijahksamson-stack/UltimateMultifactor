@@ -3,6 +3,7 @@ const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFin
 export function safeCagr(start: number | null, end: number | null, years: number): number | null {
   if (years <= 0 || !Number.isFinite(years)) return null
   if (start == null || end == null || !Number.isFinite(start) || !Number.isFinite(end)) return null
+  if (start === 0) return null
   if (start > 0 && end > 0) return Math.pow(end / start, 1 / years) - 1
   const denom = Math.max(Math.abs(start), 1e-9)
   return ((end - start) / denom) / years

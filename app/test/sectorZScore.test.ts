@@ -20,4 +20,10 @@ describe('sectorZScores', () => {
     const out = sectorZScores(rows, [{ key: 'pb', invert: true }], r => r.sector)
     expect(out.get('T0')!.pb!).toBeGreaterThan(0)
   })
+  it('excludes non-finite raw values from sector stats', () => {
+    const rows: Row[] = [1, 2, 3, 4, Infinity].map((v, i) => ({ ticker: `T${i}`, sector: 'Tech', pb: v as number }))
+    const out = sectorZScores(rows, [{ key: 'pb', invert: false }], r => r.sector)
+    expect(Number.isFinite(out.get('T0')!.pb!)).toBe(true)
+    expect(out.get('T1')!.pb!).not.toBeNaN()
+  })
 })

@@ -4,6 +4,7 @@ import { safeCagr, trendR2, computeEqGrowth, computeEqStability } from '@/lib/fa
 describe('safeCagr', () => {
   it('computes positive CAGR', () => { expect(safeCagr(100, 200, 2)!).toBeCloseTo(Math.sqrt(2) - 1, 6) })
   it('returns null on zero years', () => { expect(safeCagr(100, 200, 0)).toBeNull() })
+  it('returns null when start is zero (undefined growth rate)', () => { expect(safeCagr(0, 50, 1)).toBeNull() })
 })
 
 describe('trendR2', () => {
