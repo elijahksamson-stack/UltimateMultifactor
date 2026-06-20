@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 from typing import Awaitable, Callable
 
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -35,8 +36,10 @@ def get_bars_provider() -> BarsProvider:
 
 
 def require_auth(authorization: str = Header(default="")) -> None:
+    if not settings.ta_worker_secret:
+        raise HTTPException(status_code=401, detail="unauthorized")
     expected = f"Bearer {settings.ta_worker_secret}"
-    if not settings.ta_worker_secret or authorization != expected:
+    if not hmac.compare_digest(authorization, expected):
         raise HTTPException(status_code=401, detail="unauthorized")
 
 

@@ -28,6 +28,15 @@ def test_analyze_bars_non_finite_returns_error():
     assert res.x_var is None
 
 
+def test_analyze_bars_overflow_returns_error():
+    closes = [1.0] * 29 + [1e200]
+    highs = [c + 0.5 for c in closes]
+    lows = [c - 0.5 for c in closes]
+    res = analyze_bars("X", highs=highs, lows=lows, closes=closes)
+    assert res.error is not None
+    assert res.x_var is None
+
+
 def test_rows_to_bars_orders_ascending_and_floats():
     rows = [
         {"date": "2026-01-03", "high": Decimal("12.0"), "low": Decimal("10.0"), "close": Decimal("11.0")},

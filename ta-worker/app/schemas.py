@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class AnalyzeBatchRequest(BaseModel):
     tickers: list[str]
-    lookback_days: int = 504
+    lookback_days: int = Field(default=504, ge=1, le=2000)
 
     @field_validator("tickers")
     @classmethod

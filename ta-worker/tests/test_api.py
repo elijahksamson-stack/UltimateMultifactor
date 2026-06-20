@@ -16,6 +16,11 @@ def test_request_rejects_empty_tickers():
         AnalyzeBatchRequest(tickers=[])
 
 
+def test_request_rejects_out_of_range_lookback():
+    with pytest.raises(ValueError):
+        AnalyzeBatchRequest(tickers=["AAPL"], lookback_days=999999)
+
+
 def test_ticker_result_allows_null_factors_with_error():
     r = TickerResult(ticker="XYZ", error="insufficient_bars")
     assert r.x_var is None and r.y_var is None and r.z_var is None

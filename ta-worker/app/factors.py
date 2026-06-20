@@ -1,6 +1,8 @@
 """Pure technical-var math. No I/O. Hand-verifiable."""
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 MIN_BARS_X = 20
@@ -32,7 +34,10 @@ def compute_x_var(closes: list[float]) -> float:
         return 0.0
     avg_below = float(np.abs(below).mean())
     avg_above = float(np.abs(above).mean())
-    return (below.size * avg_below) * (above.size * avg_above)
+    result = (below.size * avg_below) * (above.size * avg_above)
+    if not math.isfinite(result):
+        raise ValueError("x_var overflow: outlier price data")
+    return result
 
 
 def compute_y_var(price: float, target: float, stop: float) -> float:

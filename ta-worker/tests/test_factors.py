@@ -32,6 +32,12 @@ def test_x_var_raises_on_non_finite():
         compute_x_var([float("nan")] + [1.0] * 19)
 
 
+def test_x_var_raises_on_overflow_output():
+    closes = [1.0] * 29 + [1e200]  # finite inputs, but product overflows
+    with pytest.raises(ValueError):
+        compute_x_var(closes)
+
+
 def test_y_var_basic_ratio():
     assert compute_y_var(price=100.0, target=110.0, stop=95.0) == pytest.approx(2.0)
 

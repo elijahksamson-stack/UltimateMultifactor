@@ -27,4 +27,4 @@ async def fetch_bars(pool: asyncpg.Pool, ticker: str, lookback_days: int) -> dic
 
 
 async def make_pool(dsn: str) -> asyncpg.Pool:
-    return await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=8)
+    return await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=8, command_timeout=10.0)
