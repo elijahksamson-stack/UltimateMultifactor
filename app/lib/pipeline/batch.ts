@@ -12,7 +12,7 @@ export interface RawRow {
 }
 
 const FACTORS: FactorSpec<RawRow>[] = [
-  { key: 'xVar', invert: false }, { key: 'yVar', invert: false }, { key: 'zVar', invert: false },
+  { key: 'xVar', invert: false, log: true }, { key: 'yVar', invert: false }, { key: 'zVar', invert: false },
   { key: 'pb', invert: true }, { key: 'ps', invert: true },
   { key: 'eqStability', invert: false }, { key: 'eqGrowth', invert: false },
 ]
