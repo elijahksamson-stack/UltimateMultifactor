@@ -1,0 +1,15 @@
+:root {
+  --bg: #0B0D0F; --panel: #111418; --line: #1E2329;
+  --text: #E6E8EB; --muted: #8A9099; --accent: #5EE6A8;
+  --pos: #5EE6A8; --neg: #E0556B; --zero: #5A626B;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); }
+body {
+  font-family: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+  font-size: 13px; line-height: 1.4; -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+::selection { background: rgba(94,230,168,0.25); }
