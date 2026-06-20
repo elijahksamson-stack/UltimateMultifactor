@@ -1,4 +1,6 @@
 from app.analyze import analyze_bars
+from decimal import Decimal
+from app.db import rows_to_bars
 
 
 def test_analyze_bars_returns_all_three_vars(trending_bars):
@@ -24,3 +26,15 @@ def test_analyze_bars_non_finite_returns_error():
     res = analyze_bars("XYZ", highs=highs, lows=lows, closes=closes)
     assert res.error == "non_finite_bars"
     assert res.x_var is None
+
+
+def test_rows_to_bars_orders_ascending_and_floats():
+    rows = [
+        {"date": "2026-01-03", "high": Decimal("12.0"), "low": Decimal("10.0"), "close": Decimal("11.0")},
+        {"date": "2026-01-02", "high": Decimal("11.0"), "low": Decimal("9.0"), "close": Decimal("10.0")},
+        {"date": "2026-01-01", "high": Decimal("10.0"), "low": Decimal("8.0"), "close": Decimal("9.0")},
+    ]
+    bars = rows_to_bars(rows)
+    assert bars["closes"] == [9.0, 10.0, 11.0]
+    assert bars["highs"][0] == 10.0
+    assert isinstance(bars["closes"][0], float)
