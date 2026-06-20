@@ -22,6 +22,8 @@ def compute_x_var(closes: list[float]) -> float:
         raise InsufficientBars(f"need >= {MIN_BARS_X} closes, got {n}")
     x = np.arange(n, dtype=float)
     y = np.asarray(closes, dtype=float)
+    if not np.isfinite(y).all():
+        raise ValueError("closes contains NaN or Inf values")
     slope, intercept = np.polyfit(x, y, 1)
     resid = y - (slope * x + intercept)
     below = resid[resid < 0]
@@ -29,7 +31,7 @@ def compute_x_var(closes: list[float]) -> float:
     if below.size == 0 or above.size == 0:
         return 0.0
     avg_below = float(np.abs(below).mean())
-    avg_above = float(above.mean())
+    avg_above = float(np.abs(above).mean())
     return (below.size * avg_below) * (above.size * avg_above)
 
 
@@ -46,7 +48,12 @@ MIN_BARS_Z = 30
 
 
 def pivot_highs(highs: list[float], w: int = 5) -> list[tuple[int, float]]:
-    """Local maxima: index i where highs[i] == max of the +/- w window."""
+    """Local maxima: index i where highs[i] == max of the +/- w window.
+
+    Assumes `highs` are raw stored OHLC values compared by value; for
+    computed/derived highs a tolerance would be needed (exact float
+    equality is unreliable for derived values).
+    """
     out: list[tuple[int, float]] = []
     n = len(highs)
     for i in range(w, n - w):
@@ -79,8 +86,12 @@ def compute_z_var(
     band = tol_atr * atr
     window_start = max(0, n - lookback)
     flips = 0
+    seen_levels: set[float] = set()
     for pidx, level in pivot_highs(highs, w=5):
         if pidx >= n - 10:
+            continue
+        level_key = round(level / band) * band
+        if level_key in seen_levels:
             continue
         broke = False
         for j in range(pidx + 1, n):
@@ -95,5 +106,6 @@ def compute_z_var(
                 )
                 if touched_as_support:
                     flips += 1
+                    seen_levels.add(level_key)
                     break
     return flips
