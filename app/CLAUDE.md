@@ -184,7 +184,8 @@ detailed step error lives in the Inngest dashboard.
 | Endpoint | Auth | Purpose |
 |----------|------|---------|
 | `POST /api/admin/trigger-screen?date=YYYY-MM-DD` | Bearer `ADMIN_TRIGGER_SECRET` | Manually fire `screen/run.trigger` (omit `date` → today) |
-| `GET /api/discovery?sector=&limit=&format=csv` | — | Latest **complete** run's ranked list (404 `no completed screen yet` if none); `limit` defaults 100, clamped to 1000; `format=csv` streams a CSV, else JSON |
+| `GET /api/discovery?sector=&limit=&format=csv` | — | Latest ranked list — derives the run from the newest `runDate` **in `advanced_screen_results`** (not `screener_runs.status`), so the page stays populated during a re-run. 404 `no completed screen yet` if empty. All numeric Decimal columns are coerced to `number` (else the UI renders them blank). `format=csv` streams a CSV. |
+| `GET /api/price-history?ticker=&days=` | — | OTM `price_history` OHLC for one ticker (validated, parameterized; default 504 bars). Powers the price sparkline + buy-point. |
 | `/api/inngest` | Inngest signing key | Inngest serve route. `PUT` re-registers the app/functions with Inngest Cloud (sync). |
 
 ## UI
@@ -193,16 +194,27 @@ The discovery screener UI lives at `/` (App Router). It uses a **coder-minimalis
 theme** — dark background, monospace type, hairline borders, a single mint accent —
 with design tokens declared as CSS variables in `app/globals.css`.
 
-- `app/page.tsx` — index route (`dynamic = 'force-dynamic'`), renders the table.
-- `app/ui/DiscoveryTable.tsx` — client component that fetches
-  `GET /api/discovery?limit=500`, renders sortable columns, a **sector filter**,
-  **z-score heat coloring** (sign + magnitude → `z-{pos|neg}-{1..3}`), and a
-  **CSV download** link. Handles loading / empty / error states.
-  ⚠️ It renders **any** non-200 (including the honest 404 "no completed screen
-  yet") as "failed to load discovery results" — that message usually means
-  *no run has completed*, not a frontend bug.
-- `app/ui/discovery.module.css` — CSS-module styles (scoped under `.tableScroll`).
-- `lib/ui/format.ts` — `formatScore`, `compareBy<T>`, `zHeat`. Tested in `test/format.test.ts`.
+Two routes: `/` (discovery table) and `/dashboard` (sector breadth + buy-point demos), linked to each other.
+
+- `app/page.tsx` / `app/ui/DiscoveryTable.tsx` — the discovery table. Fetches
+  `GET /api/discovery?limit=500`, sortable columns, **sector filter**, **CSV
+  download**. Each numeric column gets a **continuous mint-intensity gradient
+  background** normalized across visible rows (`lib/ui/gradient.ts`) so standouts
+  glow. **Click a row** → `StockDetail`. ⚠️ Renders any non-200 (incl. the honest
+  404) as "failed to load discovery results" — usually means *no run completed*.
+- `app/ui/StockDetail.tsx` — slide-over with a detailed price SVG sparkline
+  (`GET /api/price-history`): close line + regression centerline + **±1σ
+  dispersion channel** (which visualizes the X-Var factor). Geometry in `lib/ui/sparkline.ts`.
+- `app/dashboard/page.tsx` / `app/ui/Dashboard.tsx` — KPI tiles (names, sectors
+  represented, **effective-sector breadth = 1/HHI**, top sector, avg score), a
+  **sector donut** (`lib/ui/donut.ts`, mint-intensity ramp) + "opportunities by
+  sector" table, and **top-6 buy-point cards** (sparkline + `lib/ui/buyPoint.ts`:
+  channel position, trend, entry-strength 0-100 — favors uptrend pullbacks).
+- `app/ui/discovery.module.css`, `app/ui/dashboard.module.css` — CSS modules.
+- `lib/ui/` — `format.ts` (`formatScore`/`compareBy`/`zHeat`), `gradient.ts`
+  (`heatBg`/`rangeOf`), `sparkline.ts` (`buildChart`/`linearFit`), `buyPoint.ts`,
+  `donut.ts`. All pure, tested in `test/format.test.ts`, `test/ui-viz.test.ts`,
+  `test/dashboard-viz.test.ts`.
 
 ## Environment variables
 
