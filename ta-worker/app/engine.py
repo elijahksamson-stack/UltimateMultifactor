@@ -5,13 +5,17 @@ from __future__ import annotations
 
 import numpy as np
 
+from app.factors import pivot_highs
+
 STOP_ATR_MULT = 1.0
 TARGET_ATR_MULT = 1.0
 NO_SUPPORT_ATR_MULT = 2.0
 RR_TARGET = 2.0
 
 
-def atr(highs: list[float], lows: list[float], closes: list[float], period: int = 14) -> float:
+def atr(
+    highs: list[float], lows: list[float], closes: list[float], period: int = 14
+) -> float:
     """Average True Range (simple mean of true ranges over `period`)."""
     n = len(closes)
     if n < 2:
@@ -28,23 +32,34 @@ def atr(highs: list[float], lows: list[float], closes: list[float], period: int 
     return float(np.mean(window)) if window else 0.0
 
 
-def stop_and_target(price: float, atr: float, supports: list[float], resistances: list[float]) -> dict:
+def stop_and_target(
+    price: float, atr_value: float, supports: list[float], resistances: list[float]
+) -> dict:
     """Stop = nearest support below price padded by ATR; target = nearest
     resistance above price padded by ATR; both have fallbacks."""
     below = sorted([s for s in supports if s < price], reverse=True)
     above = sorted([r for r in resistances if r > price])
 
-    stop = below[0] - STOP_ATR_MULT * atr if below else price - NO_SUPPORT_ATR_MULT * atr
+    stop = (
+        below[0] - STOP_ATR_MULT * atr_value
+        if below
+        else price - NO_SUPPORT_ATR_MULT * atr_value
+    )
     risk = price - stop
-    target = above[0] + TARGET_ATR_MULT * atr if above else price + RR_TARGET * risk
+    target = (
+        above[0] + TARGET_ATR_MULT * atr_value if above else price + RR_TARGET * risk
+    )
     reward = target - price
     return {"stop": stop, "target": target, "risk": risk, "reward": reward}
 
 
-from app.factors import pivot_highs
-
-
 def _pivot_lows(lows: list[float], w: int) -> list[float]:
+    """Local minima: index i where lows[i] == min of the +/- w window.
+
+    Assumes `lows` are raw stored OHLC values compared by exact value;
+    derived/resampled lows would need a tolerance (exact float equality
+    is unreliable for derived values).
+    """
     out = []
     n = len(lows)
     for i in range(w, n - w):
@@ -61,7 +76,7 @@ def _cluster(levels: list[float], atr: float, mult: float = 0.75) -> list[float]
     ordered = sorted(levels)
     clusters: list[list[float]] = [[ordered[0]]]
     for lv in ordered[1:]:
-        if lv - clusters[-1][-1] <= band:
+        if lv - clusters[-1][0] <= band:
             clusters[-1].append(lv)
         else:
             clusters.append([lv])
