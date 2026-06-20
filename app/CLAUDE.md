@@ -7,18 +7,19 @@ This is the **scoring core** of UltimateMultifactor. It ranks the OTM universe
 (per-sector mean/σ, with a market-wide fallback when a sector has < 5 members),
 then emits a composite-ranked discovery list.
 
-It is a *secondary* process to OTM: it reuses OTM's maintained price history and
-produces its own independent ranked output (future Inngest job, `/api/discovery`,
-and UI — Plans 3 and 4, pending).
+It is a *secondary* process to OTM: it reuses OTM's maintained price history but
+produces its own independent ranked output (Inngest job, `/api/discovery`, UI).
+It is now **fully self-contained on Vercel/Inngest** — the technical factors are
+computed in-process (no external service).
 
 ## The 7 factors
 
 Two buckets:
 
-**Technical (from the TA worker — 2 years of OHLCV):**
-- **X Var** — volatility / dispersion proxy
-- **Y Var** — trend / centerline factor
-- **Z Var** — discrete regime/state var
+**Technical (computed in-process from 2 years of OHLCV — `lib/ta/`):**
+- **X Var** — volatility / dispersion proxy (regression-residual dispersion)
+- **Y Var** — trend / risk-reward factor (distance-to-target / distance-to-stop)
+- **Z Var** — discrete regime/state var (resistance→support flip count)
 
 **Fundamental (from FMP):**
 - **P/B** (inverted — cheaper is better)
@@ -30,110 +31,204 @@ Each raw factor → sector z-score (`lib/factors/sectorZScore.ts`) → composite
 buckets (`technicalScore`, `valuationScore`, `discoveryScore`) →
 rank by `discoveryScore` (`lib/factors/composite.ts`).
 
-## Data flow
+## Data storage
 
-1. **Read OTM** (`OTM_DATABASE_URL`, read-only): `tickers` (active universe +
-   sector) and `price_history` (freshness check) via `lib/db/otmClient.ts` (pg Pool).
-2. **Fetch fundamentals** from **FMP** (`FMP_API_KEY`): valuation ratios + income
-   statements via `lib/fmp/*`.
-3. **Compute technicals in-process** (`lib/ta/`): read OHLCV from OTM
-   `price_history` and compute X/Y/Z vars locally via `analyzeBatch`, batched 50
-   at a time. (Formerly a separate Railway TA worker; now fully in-process — no
+The app touches **two separate Neon Postgres databases**, with different access
+patterns and clients:
+
+### 1. OTM database — READ-ONLY source (`OTM_DATABASE_URL`)
+
+This is **OTM's own Neon DB** (the same database the Website/onthemoney.ai app
+owns). UMF reads it through a dedicated least-privilege role **`umf_readonly`**
+(SELECT on `tickers` + `price_history` only), via a raw `pg` Pool
+(`lib/db/otmClient.ts`) — *not* Prisma.
+
+- `tickers` — active universe + GICS `sector` (`WHERE is_active = true`).
+- `price_history` — daily OHLCV bars; columns used: `ticker`, `date`, `high`,
+  `low`, `close`. The technical pass pulls the newest `lookbackDays` (default
+  504 ≈ 2y) bars per ticker via a single windowed query (`lib/ta/bars.ts`).
+
+> **Credential gotcha:** the `umf_readonly` role lives on OTM's Neon DB and its
+> password must match what's in Vercel's `OTM_DATABASE_URL`. If they drift, the
+> pipeline fails on the very first gate step (`otmPriceMaxDate`) with
+> `password authentication failed for user 'umf_readonly'`, and — because the
+> `ScreenerRun` row isn't created until step 2 — leaves **no trace** in our DB.
+> To (re)provision: as OTM's `neondb_owner`, `CREATE/ALTER ROLE umf_readonly
+> LOGIN PASSWORD …; GRANT SELECT ON public.tickers, public.price_history`.
+
+### 2. UMF's own database — READ/WRITE results (`OWN_DATABASE_URL`)
+
+The app's **own** Neon DB, accessed via **Prisma** (`lib/db/ownClient.ts`).
+Defined in `prisma/schema.prisma` — three tables:
+
+- **`screener_runs`** (`ScreenerRun`) — one row per `runDate` (unique). Tracks
+  `status` (`running` | `complete` | `failed`), `totalBatches`,
+  `completedBatches`, `tickersProcessed`, timestamps, `errorLog`.
+- **`raw_factor_staging`** (`RawFactorStaging`) — **transient** per-ticker raw
+  factor values written batch-by-batch, then consumed and cleared by finalize.
+  Unique on `(runDate, ticker)`.
+- **`advanced_screen_results`** (`AdvancedScreenResult`) — the **published**
+  ranked output the UI/API read. Unique on `(runDate, ticker)`, indexed on
+  `(runDate, rank)`.
+
+**Column types matter (and bit us once):**
+- Raw factor magnitudes — `xVar`, `yVar`, `pb`, `ps`, `eqStability`, `eqGrowth`
+  — are **`Float` (double precision)**, NOT fixed-scale `Decimal`. X Var is an
+  unbounded product-of-sums (observed up to ~6.9e15 for thin penny stocks); it
+  overflowed the original `Decimal(18,6)` (~1e12 cap) and aborted the run on
+  insert. These columns only feed *relative* z-scores, so precision is moot and
+  double precision is the right type.
+- `zVar` is `Int`. The z-score columns (`zX`…`zEQGrowth`) and the composite
+  scores (`technicalScore`, `valuationScore`, `discoveryScore`) are
+  `Decimal(10,4)` — standardized/bounded values that never approach the limit.
+  `rank` is `Int`.
+
+**Data lifecycle per run (all keyed by `runDate`, pinned to UTC-midnight):**
+1. `load-universe` upserts the `ScreenerRun` row to `running` and deletes any
+   prior `raw_factor_staging` rows for the date.
+2. Each batch appends 50 tickers' raw factors to `raw_factor_staging`.
+3. `finalize` runs a **single transaction**: delete existing
+   `advanced_screen_results` for the date → insert the freshly ranked rows (in
+   chunks of 1000) → delete the staging rows → mark the run `complete`. The swap
+   is atomic, so the published list is always internally consistent.
+
+## Data flow (one run)
+
+1. **Gate on freshness** — read OTM `price_history` max `date`; abort unless it
+   equals the target date (`lib/pipeline/loadUniverse.ts`).
+2. **Load universe** — active `tickers` + sector from OTM.
+3. **Compute technicals in-process** (`lib/ta/`): windowed read of OHLCV from
+   OTM `price_history`, compute X/Y/Z locally via `analyzeBatch`, batched 50 at
+   a time. (Formerly a separate Railway TA worker; now fully in-process — no
    external service, no `TA_WORKER_*` env vars. The `ta-worker/` Python service
    is retained only as the reference implementation and is no longer deployed.)
-4. **Z-score + composite + rank** in-process.
-5. **Write results** to the app's own Neon DB (`OWN_DATABASE_URL`) via Prisma into
-   `advanced_screen_results` (`AdvancedScreenResult` model), replacing any prior
-   rows for the same `runDate`.
+4. **Fetch fundamentals** from **FMP** (`FMP_API_KEY`): per-ticker valuation
+   ratios + income statements via `lib/fmp/*`. **FMP failures are caught
+   per-ticker** → that ticker's fundamental factors become null; they never fail
+   the batch. (So if `FMP_API_KEY` is missing/invalid the screen still completes
+   with X/Y/Z populated and P/B, P/S, EQ-* null.)
+5. **Z-score + composite + rank** in-process (`lib/factors/*`).
+6. **Persist** to `advanced_screen_results` (see lifecycle above).
 
 ## Key files
 
+- `lib/db/otmClient.ts` — read-only `pg` Pool to OTM (`umf_readonly`)
+- `lib/db/ownClient.ts` — Prisma client to UMF's own DB
+- `lib/ta/` — in-process technical pass: `factors.ts` (X/Y/Z math), `engine.ts`
+  (ATR + S/R + stop/target), `analyze.ts` (per-ticker orchestration), `bars.ts`
+  (OTM `price_history` windowed reader), `index.ts` (`analyzeBatch`). Unit-tested
+  in `test/ta-*.test.ts` for parity with the Python reference.
 - `lib/factors/sectorZScore.ts` — per-sector z-scoring with market fallback
 - `lib/factors/composite.ts` — bucket scores + ranking
 - `lib/factors/eqDecomposition.ts` — EQ-Stability / EQ-Growth math
 - `lib/fmp/*` — ported FMP client (`client.ts`, `fundamentals-lite.ts`)
-- `lib/ta/` — in-process technical pass: `factors.ts` (X/Y/Z math), `engine.ts`
-  (ATR + S/R + stop/target), `analyze.ts` (per-ticker orchestration), `bars.ts`
-  (OTM `price_history` reader), `index.ts` (`analyzeBatch`). Unit-tested in
-  `test/ta-*.test.ts` for parity with the Python reference.
-- `lib/pipeline/loadUniverse.ts` — OTM universe loader + freshness helper
-- `lib/pipeline/scoreUniverse.ts` — the orchestration (fetch → score → rank → persist)
-- `scripts/run-screen.ts` — CLI entry point
-- `prisma/schema.prisma` — `AdvancedScreenResult`
+- `lib/pipeline/loadUniverse.ts` — OTM universe loader + freshness helpers
+- `lib/pipeline/batch.ts` — `computeBatchRawFactors`, `persistStaging`,
+  `scoreRawRows`, `finalizeScreen`
+- `lib/pipeline/scoreUniverse.ts` — single-process orchestration (CLI path)
+- `inngest/functions.ts` — the `runScreen` Inngest function (production path)
+- `scripts/run-screen.ts` — CLI entry; `scripts/verify-ta.ts` /
+  `scripts/scan-ta-range.ts` — read-only TA dry-run + magnitude diagnostics
+- `prisma/schema.prisma` — `ScreenerRun`, `RawFactorStaging`, `AdvancedScreenResult`
 
 ## How to run
 
 ```bash
 npm test                      # vitest unit tests
-npm run run-screen 2026-06-19 # score the universe for a given date (defaults to today)
+npm run run-screen 2026-06-18 # score the universe for a trading day (CLI, single process)
+npx tsx scripts/verify-ta.ts 25     # dry-run: compute X/Y/Z for first 25 tickers (no writes)
+npx tsx scripts/scan-ta-range.ts    # scan factor magnitudes across the universe (no writes)
 ```
 
-## Inngest pipeline + API
+Both `run-screen` and the scripts need `OWN_DATABASE_URL` + `OTM_DATABASE_URL`
+exported in the shell (they do not auto-load `.env`).
+
+## Inngest pipeline + API (production path)
 
 The screen runs as an **Inngest function** (`inngest/functions.ts` → `runScreen`),
-served at `/api/inngest` (`app/api/inngest/route.ts`).
+served at `/api/inngest` (`app/api/inngest/route.ts`, `maxDuration = 300`).
 
 **Triggers** (either fires the same function):
-- **Cron** — `TZ=America/New_York 0 3 * * *` (3:00 AM ET daily).
+- **Cron** — `TZ=America/New_York 0 3 * * *` (3:00 AM ET daily). ⚠️ See gotcha.
 - **Event** — `screen/run.trigger` with optional `{ data: { targetDate } }`.
 
 **Step shape** (each `step.run` is a retriable, memoized unit; `retries: 2`):
 1. `resolve-and-gate` — resolve target date, then **gate on OTM freshness**
    (`otmPriceMaxDate` + `latestDateIsToday`); throws if `price_history` is stale.
+   **The `ScreenerRun` row does not exist yet here** — a throw in this step
+   (bad OTM creds, stale data) leaves no DB row and `onFailure` has nothing to
+   mark, so the only error trace is in the Inngest dashboard.
 2. `load-universe` — load the active universe, upsert the `ScreenerRun` row to
-   `running`, and clear any prior `rawFactorStaging` rows for the date.
-3. `batch-N` — one step **per 50 tickers**: compute raw factors, persist to the
-   `rawFactorStaging` table, and increment `completedBatches`.
+   `running`, and clear any prior `raw_factor_staging` rows for the date.
+3. `batch-N` — one step **per 50 tickers**: compute raw factors (in-process TA +
+   FMP), persist to `raw_factor_staging`, increment `completedBatches`. A batch
+   throws only on a non-recoverable error (e.g. a DB write failure); a single
+   bad ticker never fails it.
 4. `finalize` — `finalizeScreen(date)` z-scores/composites/ranks the staged rows
-   and writes `advancedScreenResult` **transactionally**, then marks the
+   and writes `advanced_screen_results` **transactionally**, then marks the
    `ScreenerRun` `complete`.
 
-Step-per-batch over the staging table keeps each Inngest step small and
-retriable; the final transactional swap publishes a consistent ranked list.
+`onFailure` marks any still-`running` row `failed` with a generic message — the
+detailed step error lives in the Inngest dashboard.
 
 **Endpoints:**
 
 | Endpoint | Auth | Purpose |
 |----------|------|---------|
 | `POST /api/admin/trigger-screen?date=YYYY-MM-DD` | Bearer `ADMIN_TRIGGER_SECRET` | Manually fire `screen/run.trigger` (omit `date` → today) |
-| `GET /api/discovery?sector=&limit=&format=csv` | — | Latest ranked discovery list; `limit` defaults 100, clamped to 1000; `format=csv` streams a CSV download, otherwise JSON |
-| `/api/inngest` | Inngest signing key | Inngest serve route (function registration + invocation) |
+| `GET /api/discovery?sector=&limit=&format=csv` | — | Latest **complete** run's ranked list (404 `no completed screen yet` if none); `limit` defaults 100, clamped to 1000; `format=csv` streams a CSV, else JSON |
+| `/api/inngest` | Inngest signing key | Inngest serve route. `PUT` re-registers the app/functions with Inngest Cloud (sync). |
 
 ## UI
 
 The discovery screener UI lives at `/` (App Router). It uses a **coder-minimalist
 theme** — dark background, monospace type, hairline borders, a single mint accent —
-with design tokens declared as CSS variables in `app/globals.css` (consumed by both
-`app/layout.tsx` and the discovery styles).
+with design tokens declared as CSS variables in `app/globals.css`.
 
 - `app/page.tsx` — index route (`dynamic = 'force-dynamic'`), renders the table.
-- `app/ui/DiscoveryTable.tsx` — client component (`'use client'`) that fetches
-  `GET /api/discovery?limit=500`, renders sortable columns (click a header to
-  toggle asc/desc), a **sector filter** dropdown, **z-score heat coloring** of the
-  per-factor z columns (sign + magnitude buckets → `z-{pos|neg}-{1..3}` classes),
-  and a **CSV download** link (`/api/discovery?format=csv`). Handles loading /
-  empty / error states.
-- `app/ui/discovery.module.css` — CSS-module styles for the table (selectors are
-  scoped under `.tableScroll` to satisfy CSS-module purity).
-- `lib/ui/format.ts` — presentation helpers: `formatScore` (2dp, em-dash for
-  null), `compareBy<T>` (sort comparator, nulls last), `zHeat` (z → heat class).
-  Unit-tested in `test/format.test.ts`.
+- `app/ui/DiscoveryTable.tsx` — client component that fetches
+  `GET /api/discovery?limit=500`, renders sortable columns, a **sector filter**,
+  **z-score heat coloring** (sign + magnitude → `z-{pos|neg}-{1..3}`), and a
+  **CSV download** link. Handles loading / empty / error states.
+  ⚠️ It renders **any** non-200 (including the honest 404 "no completed screen
+  yet") as "failed to load discovery results" — that message usually means
+  *no run has completed*, not a frontend bug.
+- `app/ui/discovery.module.css` — CSS-module styles (scoped under `.tableScroll`).
+- `lib/ui/format.ts` — `formatScore`, `compareBy<T>`, `zHeat`. Tested in `test/format.test.ts`.
 
 ## Environment variables
 
 | Var | Purpose |
 |-----|---------|
 | `OWN_DATABASE_URL` | App's own Neon DB (Prisma) — results are written here |
-| `OTM_DATABASE_URL` | OTM Postgres (read-only) — `tickers` + `price_history` |
+| `OTM_DATABASE_URL` | OTM Neon DB (read-only as `umf_readonly`) — `tickers` + `price_history` |
 | `FMP_API_KEY` | Financial Modeling Prep API key (ratios + income statements) |
 | `FMP_BASE_URL` | Optional FMP base URL override (defaults to FMP stable) |
 | `INNGEST_EVENT_KEY` | Inngest event key (sending events / `inngest.send`) |
 | `INNGEST_SIGNING_KEY` | Inngest signing key (verifies the `/api/inngest` serve route) |
 | `ADMIN_TRIGGER_SECRET` | Bearer secret for `POST /api/admin/trigger-screen` |
 
-## Gotcha
+(There are **no** `TA_WORKER_*` vars — technicals are in-process.)
 
-`scoreUniverse(targetDate)` **aborts** (throws) if OTM `price_history`'s max date
-is not equal to `targetDate` — i.e. it refuses to score against stale price data.
-Make sure OTM's daily price ingest has run for `targetDate` before invoking the
-screen.
+## Gotchas
+
+- **Freshness gate vs. the 3 AM cron.** `resolveTargetDate` defaults the target
+  to *today* (US/Eastern), but the gate requires OTM `price_history`'s max
+  `date` to equal the target. At 3 AM the latest bars are the *previous* trading
+  day, so the scheduled cron currently can't pass the gate on its own — only
+  **manual triggers with an explicit, already-ingested trading date** complete.
+  (Mind market holidays, e.g. Juneteenth 6/19.) Fixing the cron means resolving
+  the target to OTM's max price date (or the last completed trading day) instead
+  of "today" — a one-line change, still pending.
+- **X Var magnitude / Float columns.** See *Data storage* — raw factor columns
+  are `double precision` for a reason (X Var spans ~12 orders of magnitude);
+  don't narrow them back to `Decimal`.
+- **Robust z-scoring (`lib/factors/sectorZScore.ts`).** Raw factors are
+  **winsorized to their [2nd, 98th] peer percentiles** before mean/σ and before
+  scoring, and `xVar` is additionally **log1p-transformed** (`FactorSpec.log`),
+  so penny-stock data artifacts can't hijack a sector's distribution. Without
+  this, a single extreme value produced ~33σ z-scores and dominated the ranking.
+  If you add a multiplicative, order-of-magnitude-spread factor, set `log: true`
+  for it in the `FACTORS` spec (`lib/pipeline/batch.ts`).
+- **No completed run ⇒ 404.** `/api/discovery` returns 404 until a run reaches
+  `complete`. The UI surfaces that as "failed to load discovery results".
