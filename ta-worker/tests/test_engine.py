@@ -22,3 +22,17 @@ def test_stop_and_target_fallback_when_no_levels():
     assert res["stop"] == pytest.approx(96.0)
     assert res["risk"] == pytest.approx(4.0)
     assert res["target"] == pytest.approx(108.0)
+
+
+from app.engine import support_resistance_levels
+
+
+def test_support_resistance_splits_by_price():
+    highs = [10, 12, 14, 12, 10, 12, 16, 12, 10, 12, 14, 12, 10, 12, 18, 12, 10]
+    lows = [8, 7, 6, 7, 8, 7, 5, 7, 8, 7, 6, 7, 8, 7, 4, 7, 8]
+    closes = [9] * len(highs)
+    levels = support_resistance_levels(highs, lows, closes, atr=1.0, price=9.0, w=3)
+    assert all(r > 9.0 for r in levels["resistances"])
+    assert all(s < 9.0 for s in levels["supports"])
+    assert len(levels["resistances"]) >= 1
+    assert len(levels["supports"]) >= 1

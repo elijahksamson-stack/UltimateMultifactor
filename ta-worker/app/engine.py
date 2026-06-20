@@ -39,3 +39,44 @@ def stop_and_target(price: float, atr: float, supports: list[float], resistances
     target = above[0] + TARGET_ATR_MULT * atr if above else price + RR_TARGET * risk
     reward = target - price
     return {"stop": stop, "target": target, "risk": risk, "reward": reward}
+
+
+from app.factors import pivot_highs
+
+
+def _pivot_lows(lows: list[float], w: int) -> list[float]:
+    out = []
+    n = len(lows)
+    for i in range(w, n - w):
+        if lows[i] == min(lows[i - w : i + w + 1]):
+            out.append(float(lows[i]))
+    return out
+
+
+def _cluster(levels: list[float], atr: float, mult: float = 0.75) -> list[float]:
+    """Collapse nearby levels into cluster means (band = mult * atr)."""
+    if not levels:
+        return []
+    band = max(mult * atr, 1e-9)
+    ordered = sorted(levels)
+    clusters: list[list[float]] = [[ordered[0]]]
+    for lv in ordered[1:]:
+        if lv - clusters[-1][-1] <= band:
+            clusters[-1].append(lv)
+        else:
+            clusters.append([lv])
+    return [float(np.mean(c)) for c in clusters]
+
+
+def support_resistance_levels(
+    highs: list[float],
+    lows: list[float],
+    closes: list[float],
+    atr: float,
+    price: float,
+    w: int = 5,
+) -> dict:
+    """Cluster pivot highs above price (resistance) and pivot lows below price (support)."""
+    res_raw = [lv for _, lv in pivot_highs(highs, w=w) if lv > price]
+    sup_raw = [lv for lv in _pivot_lows(lows, w=w) if lv < price]
+    return {"resistances": _cluster(res_raw, atr), "supports": _cluster(sup_raw, atr)}
