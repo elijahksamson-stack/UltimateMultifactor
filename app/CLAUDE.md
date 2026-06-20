@@ -36,8 +36,11 @@ rank by `discoveryScore` (`lib/factors/composite.ts`).
    sector) and `price_history` (freshness check) via `lib/db/otmClient.ts` (pg Pool).
 2. **Fetch fundamentals** from **FMP** (`FMP_API_KEY`): valuation ratios + income
    statements via `lib/fmp/*`.
-3. **Fetch technicals** from the **TA worker** (`TA_WORKER_URL` + `TA_WORKER_SECRET`):
-   X/Y/Z vars via `lib/taWorker/client.ts` (`analyzeBatch`, batched 50 at a time).
+3. **Compute technicals in-process** (`lib/ta/`): read OHLCV from OTM
+   `price_history` and compute X/Y/Z vars locally via `analyzeBatch`, batched 50
+   at a time. (Formerly a separate Railway TA worker; now fully in-process — no
+   external service, no `TA_WORKER_*` env vars. The `ta-worker/` Python service
+   is retained only as the reference implementation and is no longer deployed.)
 4. **Z-score + composite + rank** in-process.
 5. **Write results** to the app's own Neon DB (`OWN_DATABASE_URL`) via Prisma into
    `advanced_screen_results` (`AdvancedScreenResult` model), replacing any prior
@@ -49,7 +52,10 @@ rank by `discoveryScore` (`lib/factors/composite.ts`).
 - `lib/factors/composite.ts` — bucket scores + ranking
 - `lib/factors/eqDecomposition.ts` — EQ-Stability / EQ-Growth math
 - `lib/fmp/*` — ported FMP client (`client.ts`, `fundamentals-lite.ts`)
-- `lib/taWorker/client.ts` — TA worker HTTP client
+- `lib/ta/` — in-process technical pass: `factors.ts` (X/Y/Z math), `engine.ts`
+  (ATR + S/R + stop/target), `analyze.ts` (per-ticker orchestration), `bars.ts`
+  (OTM `price_history` reader), `index.ts` (`analyzeBatch`). Unit-tested in
+  `test/ta-*.test.ts` for parity with the Python reference.
 - `lib/pipeline/loadUniverse.ts` — OTM universe loader + freshness helper
 - `lib/pipeline/scoreUniverse.ts` — the orchestration (fetch → score → rank → persist)
 - `scripts/run-screen.ts` — CLI entry point
@@ -121,8 +127,6 @@ with design tokens declared as CSS variables in `app/globals.css` (consumed by b
 | `OTM_DATABASE_URL` | OTM Postgres (read-only) — `tickers` + `price_history` |
 | `FMP_API_KEY` | Financial Modeling Prep API key (ratios + income statements) |
 | `FMP_BASE_URL` | Optional FMP base URL override (defaults to FMP stable) |
-| `TA_WORKER_URL` | Base URL of the TA worker service |
-| `TA_WORKER_SECRET` | Bearer secret for the TA worker |
 | `INNGEST_EVENT_KEY` | Inngest event key (sending events / `inngest.send`) |
 | `INNGEST_SIGNING_KEY` | Inngest signing key (verifies the `/api/inngest` serve route) |
 | `ADMIN_TRIGGER_SECRET` | Bearer secret for `POST /api/admin/trigger-screen` |

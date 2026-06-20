@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db/ownClient'
 import { fetchValuationRatios, fetchIncomeStatements } from '@/lib/fmp/fundamentals-lite'
 import { computeEqGrowth, computeEqStability } from '@/lib/factors/eqDecomposition'
-import { analyzeBatch } from '@/lib/taWorker/client'
+import { analyzeBatch } from '@/lib/ta'
 import { sectorZScores, type FactorSpec } from '@/lib/factors/sectorZScore'
 import { composite, rankRows } from '@/lib/factors/composite'
 
