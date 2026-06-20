@@ -16,7 +16,15 @@ export async function GET(req: NextRequest) {
     select: { rank: true, ticker: true, sector: true, discoveryScore: true, technicalScore: true, valuationScore: true,
       zX: true, zY: true, zZ: true, zPB: true, zPS: true, zEQStability: true, zEQGrowth: true },
   })
-  const data = rows.map(r => ({ ...r, discoveryScore: r.discoveryScore == null ? null : Number(r.discoveryScore) }))
+  // Prisma Decimal columns serialize to JSON strings; coerce every numeric field
+  // to a real number so the UI's formatters (which reject non-numbers) render them.
+  const num = (v: unknown): number | null => (v == null ? null : Number(v))
+  const data = rows.map(r => ({
+    rank: r.rank, ticker: r.ticker, sector: r.sector,
+    discoveryScore: num(r.discoveryScore), technicalScore: num(r.technicalScore), valuationScore: num(r.valuationScore),
+    zX: num(r.zX), zY: num(r.zY), zZ: num(r.zZ), zPB: num(r.zPB), zPS: num(r.zPS),
+    zEQStability: num(r.zEQStability), zEQGrowth: num(r.zEQGrowth),
+  }))
   if (p.format === 'csv') {
     return new NextResponse(toCsv(data as any), { headers: { 'Content-Type': 'text/csv', 'Content-Disposition': `attachment; filename="discovery-${latestRun.runDate.toISOString().slice(0,10)}.csv"` } })
   }

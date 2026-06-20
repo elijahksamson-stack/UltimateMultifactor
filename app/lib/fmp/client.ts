@@ -31,7 +31,10 @@ export interface FMPClientConfig {
 const DEFAULT_CONFIG: Required<FMPClientConfig> = {
   apiKey: FMP_API_KEY || '',
   baseUrl: FMP_BASE_URL,
-  callsPerMinute: 750,
+  // The plan sustains well above the old 750/min default (measured ~7.5k/min at
+  // concurrency 10 with zero throttling). Keep headroom below that ceiling so the
+  // per-minute window cap never trips the 60s circuit-breaker pause during a run.
+  callsPerMinute: Number(process.env.FMP_CALLS_PER_MINUTE) || 6000,
   maxRetries: 3,
   retryDelay: 1000,
   timeout: 30000,

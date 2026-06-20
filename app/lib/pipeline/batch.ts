@@ -27,14 +27,36 @@ export function scoreRawRows(rows: RawRow[]) {
   return rankRows(scored)
 }
 
+// FMP fundamentals are fetched concurrently across tickers. The plan sustains
+// far more than serial throughput; this bound stays well under the rate ceiling
+// while overlapping request latency. Tune via FMP_CALLS_PER_MINUTE on the client.
+const FMP_CONCURRENCY = 6
+
+// Bounded-concurrency map that preserves input order.
+async function mapWithConcurrency<I, O>(
+  items: readonly I[],
+  limit: number,
+  fn: (item: I) => Promise<O>,
+): Promise<O[]> {
+  const out = new Array<O>(items.length)
+  let next = 0
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      const i = next++
+      out[i] = await fn(items[i])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return out
+}
+
 export async function computeBatchRawFactors(
   slice: { ticker: string; sector: string | null }[],
   lookbackDays = 504,
 ): Promise<RawRow[]> {
   const tech = await analyzeBatch(slice.map(s => s.ticker), lookbackDays)
   const byTicker = new Map(tech.map(t => [t.ticker, t]))
-  const out: RawRow[] = []
-  for (const u of slice) {
+  return mapWithConcurrency(slice, FMP_CONCURRENCY, async (u): Promise<RawRow> => {
     const t = byTicker.get(u.ticker)
     let pb: number | null = null, ps: number | null = null, eqStability: number | null = null, eqGrowth: number | null = null
     try {
@@ -44,9 +66,8 @@ export async function computeBatchRawFactors(
       eqGrowth = computeEqGrowth(mapped, Math.max(1, mapped.length - 1))
       eqStability = computeEqStability(mapped)
     } catch { /* per-ticker failure -> nulls */ }
-    out.push({ ticker: u.ticker, sector: u.sector, pb, ps, eqStability, eqGrowth, xVar: t?.xVar ?? null, yVar: t?.yVar ?? null, zVar: t?.zVar ?? null })
-  }
-  return out
+    return { ticker: u.ticker, sector: u.sector, pb, ps, eqStability, eqGrowth, xVar: t?.xVar ?? null, yVar: t?.yVar ?? null, zVar: t?.zVar ?? null }
+  })
 }
 
 export async function persistStaging(targetDate: Date, rows: RawRow[]): Promise<void> {
