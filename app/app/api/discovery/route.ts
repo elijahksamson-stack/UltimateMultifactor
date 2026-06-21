@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
     orderBy: { rank: 'asc' },
     take: p.limit,
     select: { rank: true, ticker: true, sector: true, discoveryScore: true, technicalScore: true, valuationScore: true,
+      pb: true, ps: true, marketCap: true, zMarketCap: true,
       zX: true, zY: true, zZ: true, zPB: true, zPS: true, zEQStability: true, zEQGrowth: true },
   })
   // Prisma Decimal columns serialize to JSON strings; coerce every numeric field
@@ -26,6 +27,7 @@ export async function GET(req: NextRequest) {
   const data = rows.map(r => ({
     rank: r.rank, ticker: r.ticker, sector: r.sector,
     discoveryScore: num(r.discoveryScore), technicalScore: num(r.technicalScore), valuationScore: num(r.valuationScore),
+    pb: num(r.pb), ps: num(r.ps), marketCap: num(r.marketCap), zMarketCap: num(r.zMarketCap),
     zX: num(r.zX), zY: num(r.zY), zZ: num(r.zZ), zPB: num(r.zPB), zPS: num(r.zPS),
     zEQStability: num(r.zEQStability), zEQGrowth: num(r.zEQGrowth),
   }))

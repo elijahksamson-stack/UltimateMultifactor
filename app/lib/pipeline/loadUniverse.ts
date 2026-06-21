@@ -1,6 +1,7 @@
 import { otmPool } from '@/lib/db/otmClient'
+import { fetchMarketCaps } from '@/lib/fmp/marketCap'
 
-export interface UniverseRow { ticker: string; sector: string | null }
+export interface UniverseRow { ticker: string; sector: string | null; marketCap: number | null }
 
 export function latestDateIsToday(maxDate: Date, target: Date): boolean {
   return maxDate.toISOString().slice(0, 10) === target.toISOString().slice(0, 10)
@@ -39,10 +40,11 @@ export function resolveScreenTarget(maxDate: Date | null, explicit: string | und
 }
 
 export async function loadActiveUniverse(): Promise<UniverseRow[]> {
-  const { rows } = await otmPool().query<UniverseRow>(
+  const { rows } = await otmPool().query<{ ticker: string; sector: string | null }>(
     `SELECT ticker, sector FROM tickers WHERE is_active = true ORDER BY ticker`
   )
-  return rows
+  const caps = await fetchMarketCaps() // one FMP call; missing tickers -> null
+  return rows.map(r => ({ ticker: r.ticker, sector: r.sector, marketCap: caps.get(r.ticker.toUpperCase()) ?? null }))
 }
 
 export async function otmPriceMaxDate(): Promise<Date | null> {

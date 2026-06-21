@@ -9,12 +9,17 @@ export interface RawRow {
   ticker: string; sector: string | null
   pb: number | null; ps: number | null; eqStability: number | null; eqGrowth: number | null
   xVar: number | null; yVar: number | null; zVar: number | null
+  marketCap: number | null
 }
 
 const FACTORS: FactorSpec<RawRow>[] = [
   { key: 'xVar', invert: false, log: true }, { key: 'yVar', invert: false }, { key: 'zVar', invert: false },
   { key: 'pb', invert: true }, { key: 'ps', invert: true },
   { key: 'eqStability', invert: false }, { key: 'eqGrowth', invert: false },
+  // Market cap is z-scored for display gradient only (log-transformed; spans
+  // orders of magnitude). It is NOT in Z_KEYS or the composite, so it neither
+  // filters rows nor affects the discovery ranking.
+  { key: 'marketCap', invert: false, log: true },
 ]
 
 // Per-factor z-score keys on a scored row. A row is dropped from the discovery
@@ -34,7 +39,9 @@ export function scoreRawRows(rows: RawRow[]) {
   const scored = rows.map(r => {
     const zr = z.get(r.ticker)!
     const zRec = { zX: zr.xVar, zY: zr.yVar, zZ: zr.zVar, zPB: zr.pb, zPS: zr.ps, zEQStability: zr.eqStability, zEQGrowth: zr.eqGrowth }
-    return { ...r, ...zRec, ...composite(zRec) }
+    // zMarketCap rides along for the display gradient but is excluded from
+    // composite() and the negative-z filter (it is not a quality factor).
+    return { ...r, ...zRec, zMarketCap: zr.marketCap, ...composite(zRec) }
   })
   return rankRows(scored.filter(hasNoNegativeZ))
 }
@@ -64,7 +71,7 @@ async function mapWithConcurrency<I, O>(
 }
 
 export async function computeBatchRawFactors(
-  slice: { ticker: string; sector: string | null }[],
+  slice: { ticker: string; sector: string | null; marketCap?: number | null }[],
   lookbackDays = 504,
 ): Promise<RawRow[]> {
   const tech = await analyzeBatch(slice.map(s => s.ticker), lookbackDays)
@@ -79,13 +86,13 @@ export async function computeBatchRawFactors(
       eqGrowth = computeEqGrowth(mapped, Math.max(1, mapped.length - 1))
       eqStability = computeEqStability(mapped)
     } catch { /* per-ticker failure -> nulls */ }
-    return { ticker: u.ticker, sector: u.sector, pb, ps, eqStability, eqGrowth, xVar: t?.xVar ?? null, yVar: t?.yVar ?? null, zVar: t?.zVar ?? null }
+    return { ticker: u.ticker, sector: u.sector, pb, ps, eqStability, eqGrowth, xVar: t?.xVar ?? null, yVar: t?.yVar ?? null, zVar: t?.zVar ?? null, marketCap: u.marketCap ?? null }
   })
 }
 
 export async function persistStaging(targetDate: Date, rows: RawRow[]): Promise<void> {
   await prisma.rawFactorStaging.createMany({
-    data: rows.map(r => ({ runDate: targetDate, ticker: r.ticker, sector: r.sector, xVar: r.xVar, yVar: r.yVar, zVar: r.zVar, pb: r.pb, ps: r.ps, eqStability: r.eqStability, eqGrowth: r.eqGrowth })),
+    data: rows.map(r => ({ runDate: targetDate, ticker: r.ticker, sector: r.sector, xVar: r.xVar, yVar: r.yVar, zVar: r.zVar, pb: r.pb, ps: r.ps, eqStability: r.eqStability, eqGrowth: r.eqGrowth, marketCap: r.marketCap })),
     skipDuplicates: true,
   })
 }
@@ -103,6 +110,7 @@ export async function finalizeScreen(targetDate: Date): Promise<{ processed: num
     xVar: s.xVar == null ? null : Number(s.xVar), yVar: s.yVar == null ? null : Number(s.yVar), zVar: s.zVar,
     pb: s.pb == null ? null : Number(s.pb), ps: s.ps == null ? null : Number(s.ps),
     eqStability: s.eqStability == null ? null : Number(s.eqStability), eqGrowth: s.eqGrowth == null ? null : Number(s.eqGrowth),
+    marketCap: s.marketCap == null ? null : Number(s.marketCap),
   }))
   const ranked = scoreRawRows(rows)
   await prisma.$transaction([
@@ -110,6 +118,7 @@ export async function finalizeScreen(targetDate: Date): Promise<{ processed: num
     ...chunk(ranked, 1000).map(c => prisma.advancedScreenResult.createMany({ data: c.map(r => ({
       runDate: targetDate, ticker: r.ticker, sector: r.sector,
       xVar: r.xVar, yVar: r.yVar, zVar: r.zVar, pb: r.pb, ps: r.ps, eqStability: r.eqStability, eqGrowth: r.eqGrowth,
+      marketCap: r.marketCap, zMarketCap: r.zMarketCap,
       zX: r.zX, zY: r.zY, zZ: r.zZ, zPB: r.zPB, zPS: r.zPS, zEQStability: r.zEQStability, zEQGrowth: r.zEQGrowth,
       technicalScore: r.technicalScore, valuationScore: r.valuationScore, discoveryScore: r.discoveryScore, rank: r.rank,
     })) })),

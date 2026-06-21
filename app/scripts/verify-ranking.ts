@@ -11,7 +11,7 @@ async function main() {
   const raw: RawRow[] = rows.map(r => ({
     ticker: r.ticker, sector: r.sector,
     xVar: r.xVar, yVar: r.yVar, zVar: r.zVar,
-    pb: r.pb, ps: r.ps, eqStability: r.eqStability, eqGrowth: r.eqGrowth,
+    pb: r.pb, ps: r.ps, eqStability: r.eqStability, eqGrowth: r.eqGrowth, marketCap: r.marketCap,
   }))
   const ranked = scoreRawRows(raw)
   console.log(`re-scored ${ranked.length} rows for ${String(latest.runDate).slice(0, 10)}\n`)

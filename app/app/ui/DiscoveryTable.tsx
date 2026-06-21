@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
-import { formatScore, compareBy } from '@/lib/ui/format'
+import { formatScore, formatRatio, formatMarketCap, compareBy } from '@/lib/ui/format'
 import { heatBg, rangeOf, type Range } from '@/lib/ui/gradient'
 import StockDetail from './StockDetail'
 import styles from './discovery.module.css'
@@ -10,16 +10,26 @@ const s = styles as Record<string, string>
 interface Row {
   rank: number; ticker: string; sector: string | null
   discoveryScore: number | null; technicalScore: number | null; valuationScore: number | null
+  pb: number | null; ps: number | null; marketCap: number | null; zMarketCap: number | null
   zX: number | null; zY: number | null; zZ: number | null
   zPB: number | null; zPS: number | null; zEQStability: number | null; zEQGrowth: number | null
 }
-const Z_COLS: { key: keyof Row; label: string }[] = [
-  { key: 'zX', label: 'X' }, { key: 'zY', label: 'Y' }, { key: 'zZ', label: 'Z' },
-  { key: 'zPB', label: 'P/B' }, { key: 'zPS', label: 'P/S' },
-  { key: 'zEQStability', label: 'EQ·STB' }, { key: 'zEQGrowth', label: 'EQ·GRW' },
+
+// Factor columns. `z` = show the z-score, colour by it. `ratio` = show the raw
+// ratio ("0.0x"), colour by its z-score (sector-relative strength).
+type Col =
+  | { kind: 'z'; key: keyof Row; label: string }
+  | { kind: 'ratio'; rawKey: keyof Row; zKey: keyof Row; label: string }
+const FACTOR_COLS: Col[] = [
+  { kind: 'z', key: 'zX', label: 'X' }, { kind: 'z', key: 'zY', label: 'Y' }, { kind: 'z', key: 'zZ', label: 'Z' },
+  { kind: 'ratio', rawKey: 'pb', zKey: 'zPB', label: 'P/B' }, { kind: 'ratio', rawKey: 'ps', zKey: 'zPS', label: 'P/S' },
+  { kind: 'z', key: 'zEQStability', label: 'EQ·STB' }, { kind: 'z', key: 'zEQGrowth', label: 'EQ·GRW' },
 ]
-// Numeric columns that get the per-column gradient heat background.
-const NUM_KEYS: (keyof Row)[] = ['discoveryScore', 'technicalScore', 'valuationScore', ...Z_COLS.map(c => c.key)]
+// Keys whose values drive a gradient (per-column normalized across visible rows).
+const GRADIENT_KEYS: (keyof Row)[] = [
+  'discoveryScore', 'technicalScore', 'valuationScore', 'zMarketCap',
+  'zX', 'zY', 'zZ', 'zPB', 'zPS', 'zEQStability', 'zEQGrowth',
+]
 
 export default function DiscoveryTable() {
   const [rows, setRows] = useState<Row[]>([])
@@ -46,10 +56,10 @@ export default function DiscoveryTable() {
     return [...filtered].sort(compareBy<Row>(sortKey, dir))
   }, [rows, sector, sortKey, dir])
 
-  // Per-column min/max across the visible rows, so the gradient scales to what's on screen.
+  // Per-column min/max across the visible rows, so each gradient scales to what's on screen.
   const ranges = useMemo(() => {
     const m: Record<string, Range> = {}
-    for (const k of NUM_KEYS) m[k] = rangeOf(view.map(r => r[k] as number | null))
+    for (const k of GRADIENT_KEYS) m[k] = rangeOf(view.map(r => r[k] as number | null))
     return m
   }, [view])
 
@@ -59,10 +69,10 @@ export default function DiscoveryTable() {
   }
   const caret = (key: keyof Row) => (sortKey === key ? <span className={s.caret}>{dir === 'asc' ? '↑' : '↓'}</span> : null)
 
-  const numCell = (r: Row, k: keyof Row) => {
-    const v = r[k] as number | null
-    return <td key={String(k)} style={{ background: heatBg(v, ranges[k as string]) }}>{formatScore(v)}</td>
-  }
+  // cell that shows `display` text, coloured by the gradient on `gradKey`
+  const cell = (r: Row, gradKey: keyof Row, display: string, k: string) => (
+    <td key={k} style={{ background: heatBg(r[gradKey] as number | null, ranges[gradKey as string]) }}>{display}</td>
+  )
 
   return (
     <div className={s.wrap}>
@@ -90,10 +100,14 @@ export default function DiscoveryTable() {
                 <th className={s.left} onClick={() => onSort('rank')}>#{caret('rank')}</th>
                 <th className={s.left} onClick={() => onSort('ticker')}>ticker{caret('ticker')}</th>
                 <th className={s.left} onClick={() => onSort('sector')}>sector{caret('sector')}</th>
+                <th onClick={() => onSort('marketCap')}>mkt cap{caret('marketCap')}</th>
                 <th onClick={() => onSort('discoveryScore')}>score{caret('discoveryScore')}</th>
                 <th onClick={() => onSort('technicalScore')}>tech{caret('technicalScore')}</th>
                 <th onClick={() => onSort('valuationScore')}>val{caret('valuationScore')}</th>
-                {Z_COLS.map(c => <th key={String(c.key)} onClick={() => onSort(c.key)}>{c.label}{caret(c.key)}</th>)}
+                {FACTOR_COLS.map(c => {
+                  const sortK = c.kind === 'z' ? c.key : c.rawKey
+                  return <th key={c.label} onClick={() => onSort(sortK)}>{c.label}{caret(sortK)}</th>
+                })}
               </tr>
             </thead>
             <tbody>
@@ -102,10 +116,13 @@ export default function DiscoveryTable() {
                   <td className={`${s.left} ${r.rank === 1 ? s.rankTop : s.rank}`}>{r.rank}</td>
                   <td className={`${s.left} ${s.ticker}`}>{r.ticker}</td>
                   <td className={`${s.left} ${s.sector}`}>{r.sector ?? '—'}</td>
-                  {numCell(r, 'discoveryScore')}
-                  {numCell(r, 'technicalScore')}
-                  {numCell(r, 'valuationScore')}
-                  {Z_COLS.map(c => numCell(r, c.key))}
+                  {cell(r, 'zMarketCap', formatMarketCap(r.marketCap), 'mcap')}
+                  {cell(r, 'discoveryScore', formatScore(r.discoveryScore), 'disc')}
+                  {cell(r, 'technicalScore', formatScore(r.technicalScore), 'tech')}
+                  {cell(r, 'valuationScore', formatScore(r.valuationScore), 'val')}
+                  {FACTOR_COLS.map(c => c.kind === 'z'
+                    ? cell(r, c.key, formatScore(r[c.key] as number | null), String(c.key))
+                    : cell(r, c.zKey, formatRatio(r[c.rawKey] as number | null), String(c.rawKey)))}
                 </tr>
               ))}
             </tbody>

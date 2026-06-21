@@ -33,6 +33,7 @@ model RawFactorStaging {
   ps          Float?
   eqStability Float?
   eqGrowth    Float?
+  marketCap   Float?
   @@unique([runDate, ticker])
   @@map("raw_factor_staging")
 }
@@ -49,6 +50,8 @@ model AdvancedScreenResult {
   ps             Float?
   eqStability    Float?
   eqGrowth       Float?
+  marketCap      Float?
+  zMarketCap     Decimal? @db.Decimal(10,4)
   zX             Decimal? @db.Decimal(10,4)
   zY             Decimal? @db.Decimal(10,4)
   zZ             Decimal? @db.Decimal(10,4)

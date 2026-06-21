@@ -5,7 +5,7 @@ describe('scoreRawRows', () => {
   it('drops rows with any negative z-score and ranks the survivors', () => {
     const rows = Array.from({ length: 6 }, (_, i) => ({
       ticker: `T${i}`, sector: 'Tech',
-      xVar: i, yVar: i, zVar: i, pb: 6 - i, ps: 6 - i, eqStability: i, eqGrowth: i,
+      xVar: i, yVar: i, zVar: i, pb: 6 - i, ps: 6 - i, eqStability: i, eqGrowth: i, marketCap: (i + 1) * 1e9,
     }))
     const scored = scoreRawRows(rows)
     expect(scored.length).toBeGreaterThan(0)
@@ -23,7 +23,7 @@ describe('scoreRawRows', () => {
   it('keeps a row whose only non-positive z is null (missing data, not negative)', () => {
     const rows = Array.from({ length: 6 }, (_, i) => ({
       ticker: `T${i}`, sector: 'Tech',
-      xVar: i, yVar: i, zVar: i, pb: 6 - i, ps: 6 - i,
+      xVar: i, yVar: i, zVar: i, pb: 6 - i, ps: 6 - i, marketCap: (i + 1) * 1e9,
       eqStability: i, eqGrowth: i === 5 ? null : i, // T5 strong everywhere, EQ-growth missing
     }))
     const scored = scoreRawRows(rows)
