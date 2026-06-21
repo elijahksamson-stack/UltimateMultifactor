@@ -18,8 +18,9 @@ const FACTORS: FactorSpec<RawRow>[] = [
   { key: 'eqStability', invert: false }, { key: 'eqGrowth', invert: false },
   // Market cap is z-scored for display gradient only (log-transformed; spans
   // orders of magnitude). It is NOT in Z_KEYS or the composite, so it neither
-  // filters rows nor affects the discovery ranking.
-  { key: 'marketCap', invert: false, log: true },
+  // filters rows nor affects the discovery ranking. Inverted: a SMALLER cap
+  // scores greener (more runway for future growth).
+  { key: 'marketCap', invert: true, log: true },
 ]
 
 // Per-factor z-score keys on a scored row. A row is dropped from the discovery
