@@ -20,7 +20,7 @@ export const runScreen = inngest.createFunction(
       })
     },
   },
-  [{ cron: 'TZ=America/New_York 0 3 * * *' }, { event: 'screen/run.trigger' }],
+  [{ cron: 'TZ=America/New_York 0 0 * * *' }, { event: 'screen/run.trigger' }],
   async ({ event, step }) => {
     const targetIso = await step.run('resolve-and-gate', async () => {
       const maxDate = await otmPriceMaxDate()

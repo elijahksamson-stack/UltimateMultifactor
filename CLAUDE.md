@@ -32,7 +32,7 @@ no longer calls it and no Railway service is required. See `ta-worker/CLAUDE.md`
 
 - Plan 1 (TA worker) and Plan 2 (scoring core orchestration) — implemented.
 - **Plan 3 (Inngest scheduled job + `/api/discovery`) — done.** `runScreen`
-  Inngest function (3 AM ET cron + `screen/run.trigger` event, step-per-batch →
+  Inngest function (12 AM ET cron + `screen/run.trigger` event, step-per-batch →
   transactional finalize), `POST /api/admin/trigger-screen` (bearer auth), and
   `GET /api/discovery` (JSON + CSV). See `app/CLAUDE.md`.
 - **Plan 4 (UI) — done.** Discovery screener page at `/` (App Router): a

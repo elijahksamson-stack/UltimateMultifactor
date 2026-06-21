@@ -154,7 +154,9 @@ The screen runs as an **Inngest function** (`inngest/functions.ts` → `runScree
 served at `/api/inngest` (`app/api/inngest/route.ts`, `maxDuration = 300`).
 
 **Triggers** (either fires the same function):
-- **Cron** — `TZ=America/New_York 0 3 * * *` (3:00 AM ET daily). ⚠️ See gotcha.
+- **Cron** — `TZ=America/New_York 0 0 * * *` (12:00 AM ET daily). Auto-targets
+  OTM's latest available trading day, so each new day is stored as its own
+  `runDate` snapshot (history accrues; weekends/holidays re-confirm the last day).
 - **Event** — `screen/run.trigger` with optional `{ data: { targetDate } }`.
 
 **Step shape** (each `step.run` is a retriable, memoized unit; `retries: 2`):
@@ -234,7 +236,7 @@ Two routes: `/` (discovery table) and `/dashboard` (sector breadth + buy-point d
 
 - **Freshness gate / target resolution (`resolveScreenTarget`).** A run with an
   **explicit date** (manual trigger) must equal OTM `price_history`'s max `date`
-  or it throws (refuses stale data). A run with **no date** (the 3 AM cron / any
+  or it throws (refuses stale data). A run with **no date** (the midnight cron / any
   no-date trigger) targets OTM's **latest available trading day**, so the gate
   self-passes — this is why the nightly run completes on its own despite prices
   lagging a day (and market holidays like Juneteenth 6/19). Auto runs also throw
