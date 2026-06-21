@@ -43,8 +43,10 @@ export async function loadActiveUniverse(): Promise<UniverseRow[]> {
   const { rows } = await otmPool().query<{ ticker: string; sector: string | null }>(
     `SELECT ticker, sector FROM tickers WHERE is_active = true ORDER BY ticker`
   )
-  const caps = await fetchMarketCaps() // one FMP call; missing tickers -> null
-  return rows.map(r => ({ ticker: r.ticker, sector: r.sector, marketCap: caps.get(r.ticker.toUpperCase()) ?? null }))
+  const caps = await fetchMarketCaps() // missing tickers -> null
+  // OTM uses dot notation for dual-class shares (BRK.A); FMP uses dash (BRK-A).
+  const capFor = (t: string) => caps.get(t) ?? caps.get(t.replace(/\./g, '-')) ?? null
+  return rows.map(r => ({ ticker: r.ticker, sector: r.sector, marketCap: capFor(r.ticker.toUpperCase()) }))
 }
 
 export async function otmPriceMaxDate(): Promise<Date | null> {
