@@ -10,7 +10,7 @@ const s = styles as Record<string, string>
 interface Row {
   rank: number; ticker: string; sector: string | null
   discoveryScore: number | null; technicalScore: number | null; valuationScore: number | null
-  pb: number | null; ps: number | null; marketCap: number | null; zMarketCap: number | null
+  pb: number | null; ps: number | null; marketCap: number | null; zMarketCap: number | null; yVar: number | null
   zX: number | null; zY: number | null; zZ: number | null
   zPB: number | null; zPS: number | null; zEQStability: number | null; zEQGrowth: number | null
 }
@@ -21,7 +21,9 @@ type Col =
   | { kind: 'z'; key: keyof Row; label: string }
   | { kind: 'ratio'; rawKey: keyof Row; zKey: keyof Row; label: string }
 const FACTOR_COLS: Col[] = [
-  { kind: 'z', key: 'zX', label: 'X' }, { kind: 'z', key: 'zY', label: 'Y' }, { kind: 'z', key: 'zZ', label: 'Z' },
+  { kind: 'z', key: 'zX', label: 'X' },
+  { kind: 'ratio', rawKey: 'yVar', zKey: 'zY', label: 'R/R' }, // Y Var = reward/risk ratio; show raw "Nx", colour by zY
+  { kind: 'z', key: 'zZ', label: 'Z' },
   { kind: 'ratio', rawKey: 'pb', zKey: 'zPB', label: 'P/B' }, { kind: 'ratio', rawKey: 'ps', zKey: 'zPS', label: 'P/S' },
   { kind: 'z', key: 'zEQStability', label: 'EQ·STB' }, { kind: 'z', key: 'zEQGrowth', label: 'EQ·GRW' },
 ]
